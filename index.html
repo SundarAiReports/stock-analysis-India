@@ -452,30 +452,86 @@
         </div>
     </div>
     
-    <script>
-        function initializeStockAnalysis() {
-            // Get stock symbol from URL
-            const urlParams = new URLSearchParams(window.location.search);
-            const symbol = urlParams.get('symbol') || 'AARTIIND.NS';
-            
-            // Generate company name
+   <script>
+        function getStockSymbol() {
+            try {
+                console.log('=== URL PARAMETER DEBUG ===');
+                console.log('Current URL:', window.location.href);
+                console.log('Search string:', window.location.search);
+                
+                // Method 1: URLSearchParams (modern approach)
+                const urlParams = new URLSearchParams(window.location.search);
+                let symbol = urlParams.get('symbol');
+                console.log('Method 1 - URLSearchParams result:', symbol);
+                
+                // Method 2: Manual parsing (fallback)
+                if (!symbol && window.location.search) {
+                    const params = window.location.search.substring(1).split('&');
+                    for (let param of params) {
+                        const [key, value] = param.split('=');
+                        if (key === 'symbol') {
+                            symbol = decodeURIComponent(value);
+                            console.log('Method 2 - Manual parsing result:', symbol);
+                            break;
+                        }
+                    }
+                }
+                
+                // Method 3: Regex fallback
+                if (!symbol) {
+                    const match = window.location.search.match(/[?&]symbol=([^&]+)/);
+                    if (match) {
+                        symbol = decodeURIComponent(match[1]);
+                        console.log('Method 3 - Regex result:', symbol);
+                    }
+                }
+                
+                // Final fallback
+                const finalSymbol = symbol || 'AARTIIND.NS';
+                console.log('Final symbol to use:', finalSymbol);
+                
+                return finalSymbol;
+                
+            } catch (error) {
+                console.error('Error reading URL parameters:', error);
+                return 'AARTIIND.NS';
+            }
+        }
+        
+        function updatePageContent() {
+            const symbol = getStockSymbol();
             const companyName = getCompanyName(symbol);
+            const currentTime = new Date().toLocaleString();
             
-            // Update all dynamic content
-            document.getElementById('stock-name').textContent = symbol;
-            document.getElementById('stock-company').textContent = companyName;
-            document.getElementById('current-symbol').textContent = symbol;
-            document.getElementById('current-url').textContent = window.location.href;
-            document.getElementById('last-update').textContent = new Date().toLocaleString();
-            document.getElementById('timestamp').textContent = new Date().toLocaleString();
+            console.log('Updating page content for:', symbol);
+            
+            // Force update all elements
+            const elements = {
+                'stock-name': symbol,
+                'stock-company': companyName,
+                'current-symbol': symbol,
+                'current-url': window.location.href,
+                'last-update': currentTime,
+                'timestamp': currentTime
+            };
+            
+            for (const [id, value] of Object.entries(elements)) {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.textContent = value;
+                    console.log(`Updated ${id}:`, value);
+                } else {
+                    console.warn(`Element ${id} not found`);
+                }
+            }
             
             // Update page title
             document.title = `Stock Analysis - ${symbol}`;
             
-            // Update all content sections with stock-specific data
-            updateContentForStock(symbol);
+            // Update stock-specific content
+            updateStockSpecificContent(symbol);
             
-            console.log('✅ Stock analysis initialized for:', symbol);
+            console.log('✅ Page content updated successfully');
         }
         
         function getCompanyName(symbol) {
@@ -492,14 +548,8 @@
             return companies[symbol] || `${symbol.replace('.NS', '').toUpperCase()} Limited | NSE`;
         }
         
-        function updateContentForStock(symbol) {
-            // Update footer with current stock
-            const footerTitle = document.querySelector('.footer-info p');
-            if (footerTitle) {
-                footerTitle.innerHTML = `<strong>📊 ${symbol} Investment Analysis Dashboard</strong>`;
-            }
-            
-            // Update any stock-specific references in content
+        function updateStockSpecificContent(symbol) {
+            // Update highlight boxes that contain stock references
             const highlightBoxes = document.querySelectorAll('.highlight-box');
             highlightBoxes.forEach(box => {
                 if (box.innerHTML.includes('AARTIIND.NS')) {
@@ -507,12 +557,37 @@
                 }
             });
             
-            console.log('Content updated for stock:', symbol);
+            // Update footer title
+            const footerTitle = document.querySelector('.footer-info p');
+            if (footerTitle) {
+                footerTitle.innerHTML = `<strong>📊 ${symbol} Investment Analysis Dashboard</strong>`;
+            }
+            
+            console.log('Stock-specific content updated for:', symbol);
         }
         
-        // Initialize when page loads
-        document.addEventListener('DOMContentLoaded', initializeStockAnalysis);
-        window.addEventListener('load', initializeStockAnalysis);
+        // Multiple initialization triggers to ensure it works
+        function initializePage() {
+            console.log('Initializing page...');
+            updatePageContent();
+        }
+        
+        // Run immediately if DOM is already loaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializePage);
+        } else {
+            initializePage();
+        }
+        
+        // Additional triggers
+        window.addEventListener('load', initializePage);
+        
+        // Run after a delay to catch any timing issues
+        setTimeout(initializePage, 100);
+        setTimeout(initializePage, 500);
+        
+        // Handle browser back/forward buttons
+        window.addEventListener('popstate', initializePage);
     </script>
 </body>
 </html>
