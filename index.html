@@ -301,30 +301,59 @@
     </div>
     
     <script>
-        // Simple, reliable JavaScript that always works
+        // Enhanced function with better debugging
         function updatePageInfo() {
+            console.log('=== STOCK ANALYSIS DEBUG ===');
+            console.log('Full URL:', window.location.href);
+            console.log('Search params:', window.location.search);
+            
             const urlParams = new URLSearchParams(window.location.search);
             const symbol = urlParams.get('symbol') || 'MAHSEAMLES.NS';
             const companyName = symbol.replace('.NS', '').replace('.', ' ').toUpperCase() + ' Limited';
             const currentTime = new Date().toLocaleString();
             
-            // Update all elements
+            console.log('Symbol extracted from URL:', symbol);
+            console.log('Company name generated:', companyName);
+            
+            // Update all elements with the correct symbol
             document.getElementById('stock-name').textContent = symbol;
             document.getElementById('stock-company').textContent = companyName + ' | NSE';
-            document.getElementById('current-symbol-display').textContent = symbol;
-            document.getElementById('current-url').textContent = window.location.href;
-            document.getElementById('last-updated').textContent = currentTime;
-            document.getElementById('timestamp').textContent = currentTime;
+            
+            // Check if these elements exist before updating
+            const symbolDisplay = document.getElementById('current-symbol-display');
+            const urlDisplay = document.getElementById('current-url');
+            const lastUpdated = document.getElementById('last-updated');
+            const timestamp = document.getElementById('timestamp');
+            
+            if (symbolDisplay) symbolDisplay.textContent = symbol;
+            if (urlDisplay) urlDisplay.textContent = window.location.href;
+            if (lastUpdated) lastUpdated.textContent = currentTime;
+            if (timestamp) timestamp.textContent = currentTime;
             
             // Update page title
             document.title = `Stock Analysis - ${symbol}`;
             
-            console.log('Page updated for stock:', symbol);
+            console.log('✅ Page updated successfully for stock:', symbol);
+            console.log('Current title:', document.title);
+            
+            // Verify the update worked
+            setTimeout(() => {
+                const displayedSymbol = document.getElementById('stock-name').textContent;
+                console.log('Verification - Displayed symbol:', displayedSymbol);
+                if (displayedSymbol !== symbol) {
+                    console.error('❌ MISMATCH: Expected', symbol, 'but showing', displayedSymbol);
+                } else {
+                    console.log('✅ SUCCESS: Symbol correctly displayed');
+                }
+            }, 100);
         }
         
-        // Run when page loads
+        // Run when page loads - multiple triggers to ensure it works
         document.addEventListener('DOMContentLoaded', updatePageInfo);
-        window.onload = updatePageInfo;
+        window.addEventListener('load', updatePageInfo);
+        
+        // Also run after a short delay to catch any timing issues
+        setTimeout(updatePageInfo, 500);
     </script>
 </body>
 </html>
