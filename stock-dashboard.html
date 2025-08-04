@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Stock Dashboard</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {font-family: Arial, sans-serif; background:#f4f4f4; margin:0; padding:20px;}
+    .container {max-width:900px; margin:40px auto; background:#fff; padding:20px; border-radius:8px;}
+    .header {background:#222; color:#fff; padding:15px; text-align:center; border-radius:5px;}
+    .stats {display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:15px; margin-top:20px;}
+    .stat {background:#e9ecef; padding:15px; border-radius:5px; text-align:center;}
+    .positive {color:#28a745; font-weight:bold;}
+    .negative {color:#dc3545; font-weight:bold;}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 id="stock-symbol">Loading...</h1>
+      <p id="company-name">&nbsp;</p>
+    </div>
+    <div id="stats" class="stats">
+      <div class="stat">Price: <span id="price">-</span></div>
+      <div class="stat">Change: <span id="change">-</span></div>
+      <div class="stat">Change %: <span id="change-percent">-</span></div>
+      <div class="stat">Open: <span id="open">-</span></div>
+      <div class="stat">High: <span id="high">-</span></div>
+      <div class="stat">Low: <span id="low">-</span></div>
+      <div class="stat">Volume: <span id="volume">-</span></div>
+    </div>
+  </div>
+  <script>
+    async function fetchQuote(symbol){
+      try {
+        const response = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`);
+        const data = await response.json();
+        return data.quoteResponse.result[0] || null;
+      } catch(error) {
+        console.error(error);
+        return null;
+      }
+    }
+    function formatNumber(value){
+      return value == null ? '-' : value.toLocaleString(undefined, {maximumFractionDigits: 2});
+    }
+    function updateDashboard(quote, symbol){
+      if(!quote){
+        document.getElementById('stock-symbol').textContent = symbol + ' - Data Not Found';
+        return;
+      }
+      document.getElementById('stock-symbol').textContent = symbol;
+      document.getElementById('company-name').textContent = quote.shortName || '';
+      document.getElementById('price').textContent = formatNumber(quote.regularMarketPrice);
+      const change = quote.regularMarketChange;
+      const changePercent = quote.regularMarketChangePercent;
+      const changeEl = document.getElementById('change');
+      const changePercentEl = document.getElementById('change-percent');
+      changeEl.textContent = formatNumber(change);
+      changePercentEl.textContent = formatNumber(changePercent) + '%';
+      const isPositive = change >= 0;
+      changeEl.className = changePercentEl.className = isPositive ? 'positive' : 'negative';
+      document.getElementById('open').textContent = formatNumber(quote.regularMarketOpen);
+      document.getElementById('high').textContent = formatNumber(quote.regularMarketDayHigh);
+      document.getElementById('low').textContent = formatNumber(quote.regularMarketDayLow);
+      document.getElementById('volume').textContent = formatNumber(quote.regularMarketVolume);
+    }
+    async function main(){
+      const urlParams = new URLSearchParams(window.location.search);
+      const symbol = urlParams.get('symbol') || 'AAPL';
+      const quote = await fetchQuote(symbol);
+      updateDashboard(quote, symbol);
+    }
+    window.onload = main;
+  </script>
+</body>
+</html>
