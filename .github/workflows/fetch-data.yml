@@ -1,0 +1,35 @@
+name: Update data JSON
+
+on:
+  schedule:
+    - cron:  '*/30 * * * *'      # every 30 min (lowest GitHub guarantees ≈15 min)
+  workflow_dispatch:             # manual run button
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false   # we will push with PAT
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm install node-fetch@^3
+      - run: node scripts/fetch.js
+        env:
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+
+      - name: Commit & push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/*.json
+          git commit -m "chore: automated data update" || echo "No changes"
+          git push
+        env:
+          # Default GITHUB_TOKEN has push rights to the same repo
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
