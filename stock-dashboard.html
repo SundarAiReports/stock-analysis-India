@@ -12,7 +12,8 @@
     .stat {background:#e9ecef; padding:15px; border-radius:5px; text-align:center;}
     .positive {color:#28a745; font-weight:bold;}
     .negative {color:#dc3545; font-weight:bold;}
-    .loading {text-align:center; color:#666;}
+    .loading {text-align:center; color:#666; padding:20px;}
+    .error {text-align:center; color:#dc3545; padding:20px;}
   </style>
 </head>
 <body>
@@ -22,6 +23,7 @@
       <p id="company-name">&nbsp;</p>
     </div>
     <div id="loading" class="loading">Fetching real-time data...</div>
+    <div id="error" class="error" style="display:none;"></div>
     <div id="stats" class="stats" style="display:none;">
       <div class="stat">Price: <span id="price">-</span></div>
       <div class="stat">Change: <span id="change">-</span></div>
@@ -34,64 +36,40 @@
   </div>
   <script>
     async function fetchStockData(symbol) {
-      const endpoints = [
-        // Try multiple endpoints for better reliability
-        `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`,
-        `https://financialmodelingprep.com/api/v3/quote/${symbol}`,
-        `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`
-      ];
+      const apiKey = '513N9J95UV8ZFFT1'; // Your Alpha Vantage API key
+      const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${apiKey}`;
       
-      for (const endpoint of endpoints) {
-        try {
-          console.log(`Trying: ${endpoint}`);
-          const response = await fetch(endpoint);
-          const data = await response.json();
-          
-          // Handle Yahoo Finance chart format
-          if (data.chart && data.chart.result && data.chart.result[0]) {
-            const result = data.chart.result[0];
-            const meta = result.meta;
-            return {
-              symbol: symbol,
-              shortName: meta.longName || symbol,
-              regularMarketPrice: meta.regularMarketPrice,
-              regularMarketChange: meta.regularMarketPrice - meta.previousClose,
-              regularMarketChangePercent: ((meta.regularMarketPrice - meta.previousClose) / meta.previousClose) * 100,
-              regularMarketOpen: meta.regularMarketOpen,
-              regularMarketDayHigh: meta.regularMarketDayHigh,
-              regularMarketDayLow: meta.regularMarketDayLow,
-              regularMarketVolume: meta.regularMarketVolume
-            };
-          }
-          
-          // Handle FMP format
-          if (Array.isArray(data) && data[0] && data[0].price) {
-            const quote = data[0];
-            return {
-              symbol: symbol,
-              shortName: quote.name || symbol,
-              regularMarketPrice: quote.price,
-              regularMarketChange: quote.change,
-              regularMarketChangePercent: quote.changesPercentage,
-              regularMarketOpen: quote.open,
-              regularMarketDayHigh: quote.dayHigh,
-              regularMarketDayLow: quote.dayLow,
-              regularMarketVolume: quote.volume
-            };
-          }
-          
-          // Handle Yahoo Finance quote format
-          if (data.quoteResponse && data.quoteResponse.result && data.quoteResponse.result[0]) {
-            return data.quoteResponse.result[0];
-          }
-          
-        } catch (error) {
-          console.log(`Failed ${endpoint}:`, error);
-          continue;
+      try {
+        console.log(`Fetching: ${url}`);
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        console.log('Response:', data);
+        
+        if (data['Note']) {
+          throw new Error('API limit reached. Please try again later.');
         }
+        
+        if (!data['Global Quote'] || Object.keys(data['Global Quote']).length === 0) {
+          throw new Error(`No data found for symbol: ${symbol}`);
+        }
+        
+        const quote = data['Global Quote'];
+        return {
+          symbol: quote['01. symbol'],
+          price: parseFloat(quote['05. price']),
+          change: parseFloat(quote['09. change']),
+          changePercent: parseFloat(quote['10. change percent'].replace('%', '')),
+          open: parseFloat(quote['02. open']),
+          high: parseFloat(quote['03. high']),
+          low: parseFloat(quote['04. low']),
+          volume: parseInt(quote['06. volume']),
+          previousClose: parseFloat(quote['08. previous close'])
+        };
+      } catch (error) {
+        console.error('Fetch error:', error);
+        throw error;
       }
-      
-      return null;
     }
     
     function formatNumber(value) {
@@ -99,35 +77,34 @@
       return value.toLocaleString(undefined, {maximumFractionDigits: 2});
     }
     
-    function updateDashboard(quote, symbol) {
+    function updateDashboard(data, symbol) {
       document.getElementById('loading').style.display = 'none';
-      document.getElementById('stats').style.display = 'grid';
       
-      if (!quote) {
-        document.getElementById('stock-symbol').textContent = symbol + ' - Data Not Available';
-        document.getElementById('company-name').textContent = 'Please try again later';
+      if (!data) {
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = `Unable to load data for ${symbol}`;
         return;
       }
       
-      document.getElementById('stock-symbol').textContent = symbol;
-      document.getElementById('company-name').textContent = quote.shortName || '';
-      document.getElementById('price').textContent = formatNumber(quote.regularMarketPrice);
+      document.getElementById('stats').style.display = 'grid';
+      document.getElementById('stock-symbol').textContent = data.symbol;
+      document.getElementById('company-name').textContent = 'Real-time Data via Alpha Vantage';
       
-      const change = quote.regularMarketChange;
-      const changePercent = quote.regularMarketChangePercent;
+      document.getElementById('price').textContent = '$' + formatNumber(data.price);
+      
       const changeEl = document.getElementById('change');
       const changePercentEl = document.getElementById('change-percent');
       
-      changeEl.textContent = formatNumber(change);
-      changePercentEl.textContent = formatNumber(changePercent) + '%';
+      changeEl.textContent = (data.change >= 0 ? '+' : '') + '$' + formatNumber(Math.abs(data.change));
+      changePercentEl.textContent = (data.changePercent >= 0 ? '+' : '') + formatNumber(data.changePercent) + '%';
       
-      const isPositive = change >= 0;
+      const isPositive = data.change >= 0;
       changeEl.className = changePercentEl.className = isPositive ? 'positive' : 'negative';
       
-      document.getElementById('open').textContent = formatNumber(quote.regularMarketOpen);
-      document.getElementById('high').textContent = formatNumber(quote.regularMarketDayHigh);
-      document.getElementById('low').textContent = formatNumber(quote.regularMarketDayLow);
-      document.getElementById('volume').textContent = formatNumber(quote.regularMarketVolume);
+      document.getElementById('open').textContent = '$' + formatNumber(data.open);
+      document.getElementById('high').textContent = '$' + formatNumber(data.high);
+      document.getElementById('low').textContent = '$' + formatNumber(data.low);
+      document.getElementById('volume').textContent = formatNumber(data.volume);
     }
     
     async function main() {
@@ -135,10 +112,15 @@
       const symbol = urlParams.get('symbol') || 'AAPL';
       
       document.getElementById('stock-symbol').textContent = symbol;
-      document.getElementById('company-name').textContent = 'Loading data...';
       
-      const quote = await fetchStockData(symbol);
-      updateDashboard(quote, symbol);
+      try {
+        const data = await fetchStockData(symbol);
+        updateDashboard(data, symbol);
+      } catch (error) {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = error.message;
+      }
     }
     
     window.onload = main;
