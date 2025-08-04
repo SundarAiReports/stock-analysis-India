@@ -30,7 +30,7 @@
       <p id="source" style="font-size: 12px; opacity: 0.8;"></p>
     </div>
     
-    <div id="loading" class="loading">Fetching comprehensive stock data...</div>
+    <div id="loading" class="loading">Fetching comprehensive financial data from TwelveData...</div>
     <div id="error" class="error" style="display:none;"></div>
     
     <div id="content" style="display:none;">
@@ -63,6 +63,14 @@
           <div class="metric-row">
             <span class="metric-label">Ex-Dividend Date:</span>
             <span class="metric-value" id="ex-dividend-date">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Dividend CAGR (3Y):</span>
+            <span class="metric-value" id="dividend-cagr-3y">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Dividend CAGR (5Y):</span>
+            <span class="metric-value" id="dividend-cagr-5y">-</span>
           </div>
         </div>
 
@@ -170,229 +178,245 @@
   </div>
 
   <script>
-  // Inline all functions to avoid module loading issues
-  const API_KEY = '513N9J95UV8ZFFT1';
-  const CACHE = {};
-  
-  async function avCall(params) {
-    const cacheKey = params;
-    if (CACHE[cacheKey] && Date.now() - CACHE[cacheKey].timestamp < 300000) {
-      return CACHE[cacheKey].data;
+    const TD_API_KEY = '9ab46115418746939c700a4735fffbbb'; // Replace with your key
+    const CACHE = {};
+
+    async function tdCall(endpoint, params = {}) {
+      const paramString = new URLSearchParams({...params, apikey: TD_API_KEY}).toString();
+      const cacheKey = `${endpoint}?${paramString}`;
+      
+      if (CACHE[cacheKey] && Date.now() - CACHE[cacheKey].timestamp < 300000) {
+        return CACHE[cacheKey].data;
+      }
+      
+      const url = `https://api.twelvedata.com/${endpoint}?${paramString}`;
+      console.log('Fetching:', url);
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.status === 'error') {
+        throw new Error(data.message || 'TwelveData API error');
+      }
+      
+      CACHE[cacheKey] = { data, timestamp: Date.now() };
+      return data;
     }
-    
-    const url = `https://www.alphavantage.co/query?apikey=${API_KEY}&${params}`;
-    const response = await fetch(url);
-    const data = await response.json();
-    
-    if (data.Note) throw new Error('Alpha Vantage rate limit reached');
-    if (data.Information) throw new Error(data.Information);
-    
-    CACHE[cacheKey] = { data, timestamp: Date.now() };
-    return data;
-  }
-  
-  async function getCompanyOverview(symbol) {
-    return await avCall(`function=OVERVIEW&symbol=${symbol}`);
-  }
-  
-  async function getIncomeStatement(symbol) {
-    return await avCall(`function=INCOME_STATEMENT&symbol=${symbol}`);
-  }
-  
-  async function getCashFlow(symbol) {
-    return await avCall(`function=CASH_FLOW&symbol=${symbol}`);
-  }
-  
-  async function getHistoricalPrices(symbol) {
-    const data = await avCall(`function=TIME_SERIES_DAILY_ADJUSTED&symbol=${symbol}&outputsize=full`);
-    return data['Time Series (Daily)'];
-  }
-  
-  async function globalQuote(symbol) {
-    const data = await avCall(`function=GLOBAL_QUOTE&symbol=${symbol}`);
-    return data['Global Quote'];
-  }
-  
-  function calculateCAGR(startValue, endValue, years) {
-    if (!startValue || !endValue || years <= 0) return null;
-    return Math.pow(endValue / startValue, 1 / years) - 1;
-  }
-  
-  function extractAnnualData(statements, field) {
-    const annualReports = statements.annualReports || [];
-    return annualReports.map(report => ({
-      date: report.fiscalDateEnding,
-      value: parseFloat(report[field]) || 0
-    })).sort((a, b) => new Date(b.date) - new Date(a.date));
-  }
-  
-  function calculateGrowthCAGR(data, years) {
-    if (data.length < years + 1) return null;
-    const current = data[0].value;
-    const historical = data[years].value;
-    return calculateCAGR(historical, current, years);
-  }
-  
-  function formatCurrency(value, currency = '$') {
-    if (!value || isNaN(value)) return '-';
-    return currency + Number(value).toLocaleString(undefined, {maximumFractionDigits: 2});
-  }
-  
-  function formatPercentage(value) {
-    if (!value || isNaN(value)) return '-';
-    const formatted = (value * 100).toFixed(2) + '%';
-    return value >= 0 ? '+' + formatted : formatted;
-  }
-  
-  function formatLargeNumber(value, currency = '$') {
-    if (!value || isNaN(value)) return '-';
-    const absValue = Math.abs(value);
-    let formatted;
-    
-    if (absValue >= 1e12) formatted = (value / 1e12).toFixed(2) + 'T';
-    else if (absValue >= 1e9) formatted = (value / 1e9).toFixed(2) + 'B';
-    else if (absValue >= 1e6) formatted = (value / 1e6).toFixed(2) + 'M';
-    else if (absValue >= 1e3) formatted = (value / 1e3).toFixed(2) + 'K';
-    else formatted = value.toFixed(2);
-    
-    return currency + formatted;
-  }
-  
-  function updateElement(id, value, isPercentage = false, isCurrency = false, currency = '$') {
-    const element = document.getElementById(id);
-    if (!element) return;
-    
-    if (isCurrency) {
-      element.textContent = formatLargeNumber(value, currency);
-    } else if (isPercentage) {
-      element.textContent = formatPercentage(value);
-      element.className = value >= 0 ? 'positive' : 'negative';
-    } else {
-      element.textContent = value || '-';
+
+    function calculateCAGR(startValue, endValue, years) {
+      if (!startValue || !endValue || years <= 0) return null;
+      return Math.pow(endValue / startValue, 1 / years) - 1;
     }
-  }
-  
-  async function loadStockData(symbol) {
-    try {
-      console.log('Loading data for:', symbol);
-      document.getElementById('loading').textContent = `Loading data for ${symbol}...`;
+
+    function formatCurrency(value, currency = '$', symbol = '') {
+      if (!value || isNaN(value)) return '-';
+      const absValue = Math.abs(value);
+      let formatted;
       
-      const currency = '$';
+      if (absValue >= 1e12) formatted = (value / 1e12).toFixed(2) + 'T';
+      else if (absValue >= 1e9) formatted = (value / 1e9).toFixed(2) + 'B';
+      else if (absValue >= 1e6) formatted = (value / 1e6).toFixed(2) + 'M';
+      else if (absValue >= 1e3) formatted = (value / 1e3).toFixed(2) + 'K';
+      else formatted = value.toFixed(2);
       
-      // Get current quote
-      const quote = await globalQuote(symbol);
-      console.log('Quote data:', quote);
+      return currency + formatted;
+    }
+
+    function formatPercentage(value) {
+      if (!value || isNaN(value)) return '-';
+      const formatted = (value * 100).toFixed(2) + '%';
+      return value >= 0 ? '+' + formatted : formatted;
+    }
+
+    function updateElement(id, value, isPercentage = false, isCurrency = false, currency = '$') {
+      const element = document.getElementById(id);
+      if (!element) return;
       
-      const currentData = {
-        price: parseFloat(quote['05. price']),
-        change: parseFloat(quote['09. change']),
-        changePercent: parseFloat(quote['10. change percent'].replace('%', '')),
-        open: parseFloat(quote['02. open']),
-        high: parseFloat(quote['03. high']),
-        low: parseFloat(quote['04. low']),
-        volume: parseInt(quote['06. volume'])
-      };
-      
-      // Update current price display
-      document.getElementById('price').textContent = formatCurrency(currentData.price, currency);
-      updateElement('change', currentData.change, false, true, currency);
-      updateElement('change-percent', currentData.changePercent / 100, true);
-      updateElement('open', currentData.open, false, true, currency);
-      updateElement('high', currentData.high, false, true, currency);
-      updateElement('low', currentData.low, false, true, currency);
-      updateElement('volume', currentData.volume?.toLocaleString());
-  
-      // Get fundamental data
-      console.log('Fetching fundamental data...');
-      const overview = await getCompanyOverview(symbol);
-      console.log('Overview data:', overview);
-      
-      // Update dividend information
-      updateElement('dividend-yield', overview.DividendYield || 'N/A');
-      updateElement('dividend-amount', overview.DividendPerShare, false, true, currency);
-      updateElement('ex-dividend-date', overview.ExDividendDate || 'N/A');
-      
-      // Get historical data for CAGR calculations
-      const historicalPrices = await getHistoricalPrices(symbol);
-      console.log('Historical prices sample:', Object.keys(historicalPrices).slice(0, 5));
-      
-      // Calculate price CAGR manually
-      const priceData = Object.keys(historicalPrices).sort().reverse();
-      const currentPrice = parseFloat(historicalPrices[priceData[0]]['5. adjusted close']);
-      
-      [1, 3, 5, 10, 15].forEach(years => {
-        const targetIndex = Math.min(years * 252, priceData.length - 1); // ~252 trading days per year
-        if (targetIndex < priceData.length) {
-          const historicalPrice = parseFloat(historicalPrices[priceData[targetIndex]]['5. adjusted close']);
-          const cagr = calculateCAGR(historicalPrice, currentPrice, years);
-          updateElement(`price-cagr-${years}y`, cagr, true);
-          console.log(`${years}Y CAGR:`, cagr);
+      if (isCurrency) {
+        element.textContent = formatCurrency(value, currency);
+      } else if (isPercentage) {
+        element.textContent = formatPercentage(value);
+        element.className = value >= 0 ? 'positive' : 'negative';
+      } else {
+        element.textContent = value || '-';
+      }
+    }
+
+    async function loadStockData(symbol) {
+      try {
+        console.log('Loading comprehensive data for:', symbol);
+        document.getElementById('loading').textContent = `Loading data for ${symbol}...`;
+        
+        const currency = symbol.includes('.NS') ? '₹' : '$';
+        
+        // 1. Get Current Quote
+        console.log('Fetching quote...');
+        const quote = await tdCall('quote', { symbol });
+        
+        document.getElementById('price').textContent = formatCurrency(parseFloat(quote.close), currency);
+        updateElement('change', parseFloat(quote.change), false, true, currency);
+        updateElement('change-percent', parseFloat(quote.percent_change) / 100, true);
+        updateElement('open', parseFloat(quote.open), false, true, currency);
+        updateElement('high', parseFloat(quote.high), false, true, currency);
+        updateElement('low', parseFloat(quote.low), false, true, currency);
+        updateElement('volume', parseInt(quote.volume)?.toLocaleString());
+
+        // Skip fundamental data for Indian stocks
+        if (symbol.includes('.NS') || symbol.includes('.BO')) {
+          document.getElementById('source').textContent = 'Data source: TwelveData (Price data only for Indian stocks)';
+          document.getElementById('loading').style.display = 'none';
+          document.getElementById('content').style.display = 'block';
+          return;
         }
-      });
-  
-      // Get EPS data
-      const incomeStatement = await getIncomeStatement(symbol);
-      console.log('Income statement sample:', incomeStatement);
-      
-      const epsData = extractAnnualData(incomeStatement, 'reportedEPS');
-      console.log('EPS data:', epsData);
-      
-      if (epsData.length > 0) {
-        updateElement('current-eps', epsData[0]?.value, false, true, currency);
-        [1, 3, 5].forEach(years => {
-          const growth = calculateGrowthCAGR(epsData, years);
-          updateElement(`eps-${years === 1 ? 'growth-1y' : `cagr-${years}y`}`, growth, true);
+
+        // 2. Get Historical Price Data for CAGR
+        console.log('Fetching historical prices...');
+        const historicalData = await tdCall('time_series', { 
+          symbol, 
+          interval: '1day', 
+          outputsize: 5000 
         });
+        
+        if (historicalData.values) {
+          const prices = historicalData.values.reverse(); // oldest to newest
+          const currentPrice = parseFloat(prices[prices.length - 1].close);
+          
+          // Calculate Price CAGR
+          [1, 3, 5, 10, 15].forEach(years => {
+            const daysBack = years * 252; // trading days
+            if (prices.length > daysBack) {
+              const historicalPrice = parseFloat(prices[prices.length - 1 - daysBack].close);
+              const cagr = calculateCAGR(historicalPrice, currentPrice, years);
+              updateElement(`price-cagr-${years}y`, cagr, true);
+            }
+          });
+        }
+
+        // 3. Get Dividend Data
+        console.log('Fetching dividends...');
+        try {
+          const dividends = await tdCall('dividends', { symbol });
+          if (dividends && dividends.length > 0) {
+            const latestDiv = dividends[0];
+            const annualDividend = dividends.slice(0, 4).reduce((sum, div) => sum + parseFloat(div.amount || 0), 0);
+            const dividendYield = (annualDividend / currentPrice) * 100;
+            
+            updateElement('dividend-yield', dividendYield + '%');
+            updateElement('dividend-amount', annualDividend, false, true, currency);
+            updateElement('ex-dividend-date', latestDiv.ex_date || 'N/A');
+            
+            // Calculate Dividend CAGR
+            if (dividends.length >= 36) { // 3 years of monthly data
+              const div3YearsAgo = parseFloat(dividends[35]?.amount || 0);
+              const divCagr3Y = calculateCAGR(div3YearsAgo, parseFloat(latestDiv.amount), 3);
+              updateElement('dividend-cagr-3y', divCagr3Y, true);
+            }
+            
+            if (dividends.length >= 60) { // 5 years
+              const div5YearsAgo = parseFloat(dividends[59]?.amount || 0);
+              const divCagr5Y = calculateCAGR(div5YearsAgo, parseFloat(latestDiv.amount), 5);
+              updateElement('dividend-cagr-5y', divCagr5Y, true);
+            }
+          }
+        } catch (divError) {
+          console.log('Dividend data not available:', divError.message);
+        }
+
+        // 4. Get Earnings Data
+        console.log('Fetching earnings...');
+        try {
+          const earnings = await tdCall('earnings', { symbol });
+          if (earnings && earnings.length > 0) {
+            const latestEarnings = earnings[0];
+            updateElement('current-eps', latestEarnings.eps_actual, false, true, currency);
+            
+            // Calculate EPS growth
+            if (earnings.length >= 4) { // 1 year of quarterly data
+              const eps1YearAgo = parseFloat(earnings[3]?.eps_actual || 0);
+              const currentEPS = parseFloat(latestEarnings.eps_actual || 0);
+              const epsGrowth1Y = calculateCAGR(eps1YearAgo, currentEPS, 1);
+              updateElement('eps-growth-1y', epsGrowth1Y, true);
+            }
+            
+            // 3 and 5 year EPS CAGR
+            [3, 5].forEach(years => {
+              const quartersBack = years * 4;
+              if (earnings.length >= quartersBack) {
+                const epsHistorical = parseFloat(earnings[quartersBack - 1]?.eps_actual || 0);
+                const cagr = calculateCAGR(epsHistorical, parseFloat(latestEarnings.eps_actual), years);
+                updateElement(`eps-cagr-${years}y`, cagr, true);
+              }
+            });
+          }
+        } catch (earningsError) {
+          console.log('Earnings data not available:', earningsError.message);
+        }
+
+        // 5. Get Financial Statements (Cash Flow & Income Statement)
+        console.log('Fetching financial statements...');
+        try {
+          // Cash Flow Statement
+          const cashFlow = await tdCall('cash_flow', { symbol });
+          if (cashFlow && cashFlow.length > 0) {
+            const latestCF = cashFlow[0];
+            const fcf = parseFloat(latestCF.free_cash_flow || latestCF.operating_cash_flow || 0);
+            updateElement('current-fcf', fcf, false, true, currency);
+            
+            // FCF Growth CAGR
+            [1, 3, 5, 10].forEach(years => {
+              if (cashFlow.length > years) {
+                const historicalFCF = parseFloat(cashFlow[years]?.free_cash_flow || cashFlow[years]?.operating_cash_flow || 0);
+                const cagr = calculateCAGR(historicalFCF, fcf, years);
+                updateElement(`fcf-${years === 1 ? 'growth-1y' : `cagr-${years}y`}`, cagr, true);
+              }
+            });
+          }
+
+          // Income Statement for Revenue
+          const incomeStatement = await tdCall('income_statement', { symbol });
+          if (incomeStatement && incomeStatement.length > 0) {
+            const latestIncome = incomeStatement[0];
+            const revenue = parseFloat(latestIncome.total_revenue || 0);
+            updateElement('current-revenue', revenue, false, true, currency);
+            
+            // Revenue Growth CAGR
+            [1, 3, 5, 10, 15].forEach(years => {
+              if (incomeStatement.length > years) {
+                const historicalRevenue = parseFloat(incomeStatement[years]?.total_revenue || 0);
+                const cagr = calculateCAGR(historicalRevenue, revenue, years);
+                updateElement(`revenue-${years === 1 ? 'growth-1y' : `cagr-${years}y`}`, cagr, true);
+              }
+            });
+          }
+        } catch (statementsError) {
+          console.log('Financial statements not available:', statementsError.message);
+        }
+
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('content').style.display = 'block';
+        document.getElementById('source').textContent = 'Data source: TwelveData API';
+        
+        console.log('Data loading completed successfully');
+        
+      } catch (error) {
+        console.error('Error loading stock data:', error);
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = `Error loading data: ${error.message}`;
       }
-  
-      // Get cash flow data
-      const cashFlow = await getCashFlow(symbol);
-      const fcfData = extractAnnualData(cashFlow, 'operatingCashflow');
-      
-      if (fcfData.length > 0) {
-        updateElement('current-fcf', fcfData[0]?.value, false, true, currency);
-        [1, 3, 5, 10].forEach(years => {
-          const growth = calculateGrowthCAGR(fcfData, years);
-          updateElement(`fcf-${years === 1 ? 'growth-1y' : `cagr-${years}y`}`, growth, true);
-        });
-      }
-  
-      // Get revenue data
-      const revenueData = extractAnnualData(incomeStatement, 'totalRevenue');
-      
-      if (revenueData.length > 0) {
-        updateElement('current-revenue', revenueData[0]?.value, false, true, currency);
-        [1, 3, 5, 10, 15].forEach(years => {
-          const growth = calculateGrowthCAGR(revenueData, years);
-          updateElement(`revenue-${years === 1 ? 'growth-1y' : `cagr-${years}y`}`, growth, true);
-        });
-      }
-  
-      document.getElementById('loading').style.display = 'none';
-      document.getElementById('content').style.display = 'block';
-      document.getElementById('source').textContent = 'Data source: Alpha Vantage';
-      
-      console.log('Data loading completed successfully');
-      
-    } catch (error) {
-      console.error('Error loading stock data:', error);
-      document.getElementById('loading').style.display = 'none';
-      document.getElementById('error').style.display = 'block';
-      document.getElementById('error').textContent = `Error loading data: ${error.message}`;
     }
-  }
-  
-  async function main() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const symbol = urlParams.get('symbol') || 'AAPL';
-    
-    document.getElementById('stock-symbol').textContent = symbol;
-    document.title = `${symbol} - Stock Analysis Dashboard`;
-    
-    await loadStockData(symbol);
-  }
-  
-  window.onload = main;
+
+    async function main() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const symbol = urlParams.get('symbol') || 'AAPL';
+      
+      document.getElementById('stock-symbol').textContent = symbol;
+      document.title = `${symbol} - Comprehensive Stock Analysis`;
+      
+      await loadStockData(symbol);
+    }
+
+    window.onload = main;
   </script>
 </body>
 </html>
