@@ -128,76 +128,140 @@
             try {
                 console.log(`Fetching live data for ${symbol}...`);
                 
-                // Multiple API sources for reliability
-                const apiSources = [
-                    // Yahoo Finance API (Primary)
-                    `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5y`,
-                    // Alternative: Alpha Vantage (if you have API key)
-                    // `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=513N9J95UV8ZFFT1`,
-                ];
-
-                for (let apiUrl of apiSources) {
-                    try {
-                        const response = await fetch(apiUrl);
-                        if (!response.ok) continue;
-                        
-                        const data = await response.json();
-                        
-                        if (data.chart && data.chart.result && data.chart.result[0]) {
-                            const result = data.chart.result[0];
-                            const meta = result.meta;
-                            const quotes = result.indicators.quote[0];
-                            const timestamps = result.timestamp;
-                            const closePrices = quotes.close;
-
-                            const currentPrice = meta.regularMarketPrice || meta.previousClose;
-                            const previousClose = meta.previousClose;
-                            const change = currentPrice - previousClose;
-                            const changePercent = (change / previousClose) * 100;
-
-                            // Calculate historical returns from actual price data
-                            const returns = calculateHistoricalReturns(closePrices, timestamps);
-                            
-                            // Calculate dividend yield estimate
-                            const dividendYield = meta.dividendYield || estimateDividendYield(symbol);
-                            
-                            return {
-                                success: true,
-                                symbol: symbol,
-                                name: symbol,
-                                company: meta.longName || generateCompanyName(symbol),
-                                currentPrice: currentPrice,
-                                change: change,
-                                changePercent: changePercent,
-                                changeClass: changePercent >= 0 ? 'positive' : 'negative',
-                                marketCap: meta.marketCap,
-                                peRatio: meta.trailingPE,
-                                high52w: meta.fiftyTwoWeekHigh,
-                                low52w: meta.fiftyTwoWeekLow,
-                                volume: meta.regularMarketVolume,
-                                dividendYield: dividendYield,
-                                historicalReturns: returns,
-                                lastUpdated: new Date()
-                            };
-                        }
-                    } catch (apiError) {
-                        console.log(`API ${apiUrl} failed:`, apiError.message);
-                        continue;
-                    }
+                // Alpha Vantage API - replace with your actual API key
+                const apiKey = '513N9J95UV8ZFFT1';
+                const apiUrl = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${apiKey}`;
+                
+                const response = await fetch(apiUrl);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 
-                throw new Error('All API sources failed');
+                const data = await response.json();
+                console.log('Alpha Vantage response:', data);
+                
+                // Check if we have valid data
+                if (data['Global Quote']) {
+                    const quote = data['Global Quote'];
+                    
+                    const currentPrice = parseFloat(quote['05. price']);
+                    const change = parseFloat(quote['09. change']);
+                    const changePercent = parseFloat(quote['10. change percent'].replace('%', ''));
+                    
+                    return {
+                        success: true,
+                        symbol: symbol,
+                        name: symbol,
+                        company: generateCompanyName(symbol),
+                        currentPrice: currentPrice,
+                        change: change,
+                        changePercent: changePercent,
+                        changeClass: changePercent >= 0 ? 'positive' : 'negative',
+                        volume: parseInt(quote['06. volume']),
+                        high: parseFloat(quote['03. high']),
+                        low: parseFloat(quote['04. low']),
+                        previousClose: parseFloat(quote['08. previous close']),
+                        lastUpdated: new Date()
+                    };
+                } else if (data['Error Message']) {
+                    throw new Error(data['Error Message']);
+                } else if (data['Note']) {
+                    throw new Error('API call frequency limit reached. Please try again later.');
+                } else {
+                    throw new Error('Invalid response structure');
+                }
                 
             } catch (error) {
-                console.error('Error fetching stock data:', error);
+                console.error('Error fetching from Alpha Vantage:', error);
+                
+                // Try Finnhub as backup
+                return await fetchFromFinnhub(symbol);
+            }
+        }
+        
+        // Backup function using Finnhub
+        async function fetchFromFinnhub(symbol) {
+            try {
+                console.log(`Trying Finnhub for ${symbol}...`);
+                
+                // Finnhub API - replace with your actual API key
+                const apiKey = 'd1ud7jpr01qp7ee2uqagd1ud7jpr01qp7ee2uqb0';
+                const apiUrl = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKey}`;
+                
+                const response = await fetch(apiUrl);
+                const data = await response.json();
+                
+                if (data.c && data.c > 0) {
+                    const currentPrice = data.c;
+                    const change = data.d;
+                    const changePercent = data.dp;
+                    
+                    return {
+                        success: true,
+                        symbol: symbol,
+                        name: symbol,
+                        company: generateCompanyName(symbol),
+                        currentPrice: currentPrice,
+                        change: change,
+                        changePercent: changePercent,
+                        changeClass: changePercent >= 0 ? 'positive' : 'negative',
+                        high: data.h,
+                        low: data.l,
+                        previousClose: data.pc,
+                        lastUpdated: new Date()
+                    };
+                } else {
+                    throw new Error('Invalid Finnhub response');
+                }
+                
+            } catch (error) {
+                console.error('Error fetching from Finnhub:', error);
+                
+                // Try 12Data as final backup
+                return await fetchFrom12Data(symbol);
+            }
+        }
+        
+        // Final backup using 12Data
+        async function fetchFrom12Data(symbol) {
+            try {
+                console.log(`Trying 12Data for ${symbol}...`);
+                
+                // 12Data API - replace with your actual API key
+                const apiKey = '9ab46115418746939c700a4735fffbbb';
+                const apiUrl = `https://api.twelvedata.com/price?symbol=${symbol}&apikey=${apiKey}`;
+                
+                const response = await fetch(apiUrl);
+                const data = await response.json();
+                
+                if (data.price) {
+                    return {
+                        success: true,
+                        symbol: symbol,
+                        name: symbol,
+                        company: generateCompanyName(symbol),
+                        currentPrice: parseFloat(data.price),
+                        change: 0, // 12Data price endpoint doesn't include change
+                        changePercent: 0,
+                        changeClass: 'neutral',
+                        lastUpdated: new Date()
+                    };
+                } else {
+                    throw new Error('Invalid 12Data response');
+                }
+                
+            } catch (error) {
+                console.error('All APIs failed for', symbol, error);
                 return {
                     success: false,
                     symbol: symbol,
-                    error: error.message,
+                    error: 'All API sources failed',
                     company: generateCompanyName(symbol)
                 };
             }
         }
+
 
         function calculateHistoricalReturns(closePrices, timestamps) {
             if (!closePrices || closePrices.length < 2) return null;
