@@ -128,9 +128,9 @@
             try {
                 console.log(`Fetching live data for ${symbol}...`);
                 
-                // Alpha Vantage API - replace with your actual API key
+                // Replace with your actual Alpha Vantage API key
                 const apiKey = '513N9J95UV8ZFFT1';
-                const apiUrl = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${apiKey}`;
+                const apiUrl = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&apikey=${apiKey}`;
                 
                 const response = await fetch(apiUrl);
                 
@@ -142,12 +142,19 @@
                 console.log('Alpha Vantage response:', data);
                 
                 // Check if we have valid data
-                if (data['Global Quote']) {
-                    const quote = data['Global Quote'];
+                if (data['Time Series (Daily)']) {
+                    const timeSeries = data['Time Series (Daily)'];
+                    const dates = Object.keys(timeSeries).sort().reverse(); // Most recent first
+                    const latestDate = dates[0];
+                    const previousDate = dates[1];
                     
-                    const currentPrice = parseFloat(quote['05. price']);
-                    const change = parseFloat(quote['09. change']);
-                    const changePercent = parseFloat(quote['10. change percent'].replace('%', ''));
+                    const latest = timeSeries[latestDate];
+                    const previous = timeSeries[previousDate];
+                    
+                    const currentPrice = parseFloat(latest['4. close']);
+                    const previousPrice = parseFloat(previous['4. close']);
+                    const change = currentPrice - previousPrice;
+                    const changePercent = (change / previousPrice) * 100;
                     
                     return {
                         success: true,
@@ -158,10 +165,11 @@
                         change: change,
                         changePercent: changePercent,
                         changeClass: changePercent >= 0 ? 'positive' : 'negative',
-                        volume: parseInt(quote['06. volume']),
-                        high: parseFloat(quote['03. high']),
-                        low: parseFloat(quote['04. low']),
-                        previousClose: parseFloat(quote['08. previous close']),
+                        volume: parseInt(latest['5. volume']),
+                        high: parseFloat(latest['2. high']),
+                        low: parseFloat(latest['3. low']),
+                        open: parseFloat(latest['1. open']),
+                        previousClose: previousPrice,
                         lastUpdated: new Date()
                     };
                 } else if (data['Error Message']) {
@@ -169,94 +177,15 @@
                 } else if (data['Note']) {
                     throw new Error('API call frequency limit reached. Please try again later.');
                 } else {
-                    throw new Error('Invalid response structure');
+                    throw new Error('No valid data in response');
                 }
                 
             } catch (error) {
                 console.error('Error fetching from Alpha Vantage:', error);
-                
-                // Try Finnhub as backup
-                return await fetchFromFinnhub(symbol);
-            }
-        }
-        
-        // Backup function using Finnhub
-        async function fetchFromFinnhub(symbol) {
-            try {
-                console.log(`Trying Finnhub for ${symbol}...`);
-                
-                // Finnhub API - replace with your actual API key
-                const apiKey = 'd1ud7jpr01qp7ee2uqagd1ud7jpr01qp7ee2uqb0';
-                const apiUrl = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKey}`;
-                
-                const response = await fetch(apiUrl);
-                const data = await response.json();
-                
-                if (data.c && data.c > 0) {
-                    const currentPrice = data.c;
-                    const change = data.d;
-                    const changePercent = data.dp;
-                    
-                    return {
-                        success: true,
-                        symbol: symbol,
-                        name: symbol,
-                        company: generateCompanyName(symbol),
-                        currentPrice: currentPrice,
-                        change: change,
-                        changePercent: changePercent,
-                        changeClass: changePercent >= 0 ? 'positive' : 'negative',
-                        high: data.h,
-                        low: data.l,
-                        previousClose: data.pc,
-                        lastUpdated: new Date()
-                    };
-                } else {
-                    throw new Error('Invalid Finnhub response');
-                }
-                
-            } catch (error) {
-                console.error('Error fetching from Finnhub:', error);
-                
-                // Try 12Data as final backup
-                return await fetchFrom12Data(symbol);
-            }
-        }
-        
-        // Final backup using 12Data
-        async function fetchFrom12Data(symbol) {
-            try {
-                console.log(`Trying 12Data for ${symbol}...`);
-                
-                // 12Data API - replace with your actual API key
-                const apiKey = '9ab46115418746939c700a4735fffbbb';
-                const apiUrl = `https://api.twelvedata.com/price?symbol=${symbol}&apikey=${apiKey}`;
-                
-                const response = await fetch(apiUrl);
-                const data = await response.json();
-                
-                if (data.price) {
-                    return {
-                        success: true,
-                        symbol: symbol,
-                        name: symbol,
-                        company: generateCompanyName(symbol),
-                        currentPrice: parseFloat(data.price),
-                        change: 0, // 12Data price endpoint doesn't include change
-                        changePercent: 0,
-                        changeClass: 'neutral',
-                        lastUpdated: new Date()
-                    };
-                } else {
-                    throw new Error('Invalid 12Data response');
-                }
-                
-            } catch (error) {
-                console.error('All APIs failed for', symbol, error);
                 return {
                     success: false,
                     symbol: symbol,
-                    error: 'All API sources failed',
+                    error: error.message,
                     company: generateCompanyName(symbol)
                 };
             }
@@ -318,133 +247,67 @@
                         <p><strong>Stock Symbol:</strong> ${stockData.symbol}</p>
                         <p><strong>Company:</strong> ${stockData.company}</p>
                         <p><strong>Error:</strong> ${stockData.error}</p>
-                        <p>This could be due to API rate limits or network issues. Please try again in a few moments.</p>
-                    </div>
-                    <div class="section">
-                        <h2>📊 Analysis Framework Ready</h2>
-                        <p>The analysis system is operational and ready to display comprehensive data for ${stockData.symbol} when market data becomes available.</p>
+                        <p>Please check your API key and try again in a few moments.</p>
                     </div>
                 `;
             }
-
-            const returns = stockData.historicalReturns || {};
-            
+        
             return `
                 <div class="success-banner">
                     <strong>✅ Live Data Successfully Loaded for ${stockData.symbol}</strong><br>
-                    Real-time market data fetched at ${stockData.lastUpdated.toLocaleString()}
+                    Real-time market data fetched from Alpha Vantage at ${stockData.lastUpdated.toLocaleString()}
                 </div>
                 
                 <div class="section">
                     <h2>📊 Current Market Context</h2>
                     <div class="metric-grid">
                         <div class="metric-card">
-                            <div class="metric-value">₹${stockData.currentPrice?.toFixed(2) || 'N/A'}</div>
+                            <div class="metric-value">₹${stockData.currentPrice.toFixed(2)}</div>
                             <div class="metric-label">Current Price</div>
                         </div>
                         <div class="metric-card">
                             <div class="metric-value ${stockData.changeClass}">
-                                ${stockData.changePercent >= 0 ? '+' : ''}${stockData.changePercent?.toFixed(2) || 'N/A'}%
+                                ${stockData.changePercent >= 0 ? '+' : ''}${stockData.changePercent.toFixed(2)}%
                             </div>
                             <div class="metric-label">Daily Change</div>
                         </div>
                         <div class="metric-card">
-                            <div class="metric-value">
-                                ${stockData.marketCap ? `₹${(stockData.marketCap / 10000000).toFixed(0)} Cr` : 'N/A'}
-                            </div>
-                            <div class="metric-label">Market Cap</div>
+                            <div class="metric-value">₹${stockData.high.toFixed(2)}</div>
+                            <div class="metric-label">Day High</div>
                         </div>
                         <div class="metric-card">
-                            <div class="metric-value">${stockData.peRatio?.toFixed(1) || 'N/A'}</div>
-                            <div class="metric-label">P/E Ratio</div>
+                            <div class="metric-value">₹${stockData.low.toFixed(2)}</div>
+                            <div class="metric-label">Day Low</div>
                         </div>
                         <div class="metric-card">
-                            <div class="metric-value">₹${stockData.high52w?.toFixed(2) || 'N/A'}</div>
-                            <div class="metric-label">52W High</div>
+                            <div class="metric-value">${(stockData.volume / 1000).toFixed(0)}K</div>
+                            <div class="metric-label">Volume</div>
                         </div>
                         <div class="metric-card">
-                            <div class="metric-value">₹${stockData.low52w?.toFixed(2) || 'N/A'}</div>
-                            <div class="metric-label">52W Low</div>
+                            <div class="metric-value">₹${stockData.open.toFixed(2)}</div>
+                            <div class="metric-label">Open Price</div>
                         </div>
                     </div>
                 </div>
                 
                 <div class="section">
-                    <h2>📈 Historical Performance - ${stockData.symbol}</h2>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Period</th>
-                                <th>CAGR</th>
-                                <th>Absolute Return</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>1 Year</td>
-                                <td class="${returns['1year'] ? 'positive' : 'neutral'}">
-                                    ${returns['1year']?.cagr ? returns['1year'].cagr + '%' : 'Calculating...'}
-                                </td>
-                                <td class="${returns['1year'] ? 'positive' : 'neutral'}">
-                                    ${returns['1year']?.absolute ? returns['1year'].absolute + '%' : 'Calculating...'}
-                                </td>
-                                <td>Live Data</td>
-                            </tr>
-                            <tr>
-                                <td>3 Year</td>
-                                <td class="${returns['3year'] ? 'positive' : 'neutral'}">
-                                    ${returns['3year']?.cagr ? returns['3year'].cagr + '%' : 'Calculating...'}
-                                </td>
-                                <td class="${returns['3year'] ? 'positive' : 'neutral'}">
-                                    ${returns['3year']?.absolute ? returns['3year'].absolute + '%' : 'Calculating...'}
-                                </td>
-                                <td>Live Data</td>
-                            </tr>
-                            <tr>
-                                <td>5 Year</td>
-                                <td class="${returns['5year'] ? 'positive' : 'neutral'}">
-                                    ${returns['5year']?.cagr ? returns['5year'].cagr + '%' : 'Calculating...'}
-                                </td>
-                                <td class="${returns['5year'] ? 'positive' : 'neutral'}">
-                                    ${returns['5year']?.absolute ? returns['5year'].absolute + '%' : 'Calculating...'}
-                                </td>
-                                <td>Live Data</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                
-                <div class="section">
-                    <h2>💰 Investment Metrics - ${stockData.symbol}</h2>
-                    <div class="metric-grid">
-                        <div class="metric-card">
-                            <div class="metric-value">${stockData.dividendYield}%</div>
-                            <div class="metric-label">Estimated Dividend Yield</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-value">${stockData.volume ? (stockData.volume / 1000).toFixed(0) + 'K' : 'N/A'}</div>
-                            <div class="metric-label">Today's Volume</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-value">Live</div>
-                            <div class="metric-label">Data Status</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-value">NSE</div>
-                            <div class="metric-label">Exchange</div>
-                        </div>
-                    </div>
+                    <h2>📈 Price Analysis - ${stockData.symbol}</h2>
+                    <p><strong>Current Price:</strong> ₹${stockData.currentPrice.toFixed(2)}</p>
+                    <p><strong>Previous Close:</strong> ₹${stockData.previousClose.toFixed(2)}</p>
+                    <p><strong>Change:</strong> <span class="${stockData.changeClass}">₹${stockData.change.toFixed(2)} (${stockData.changePercent >= 0 ? '+' : ''}${stockData.changePercent.toFixed(2)}%)</span></p>
+                    <p><strong>Day Range:</strong> ₹${stockData.low.toFixed(2)} - ₹${stockData.high.toFixed(2)}</p>
+                    <p><strong>Volume:</strong> ${stockData.volume.toLocaleString()} shares</p>
                 </div>
                 
                 <div style="text-align: center; color: #6c757d; font-style: italic; margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
                     <p><strong>📊 Live Analysis for ${stockData.symbol}</strong></p>
-                    <p><strong>Data Source:</strong> Real-time Market APIs</p>
+                    <p><strong>Data Source:</strong> Alpha Vantage API</p>
                     <p><strong>Last Updated:</strong> ${stockData.lastUpdated.toLocaleString()}</p>
-                    <p><strong>Status:</strong> ✅ Dynamic data for any stock symbol</p>
+                    <p><strong>Status:</strong> ✅ Real-time data for ${stockData.symbol}</p>
                 </div>
             `;
         }
+
 
         async function displayStock() {
             const symbol = getStockSymbol();
