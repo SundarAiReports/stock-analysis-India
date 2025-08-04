@@ -5,16 +5,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body {font-family: Arial, sans-serif; background:#f4f4f4; margin:0; padding:20px;}
-    .container {max-width:900px; margin:40px auto; background:#fff; padding:20px; border-radius:8px;}
-    .header {background:#222; color:#fff; padding:15px; text-align:center; border-radius:5px;}
-    .stats {display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:15px; margin-top:20px;}
-    .stat {background:#e9ecef; padding:15px; border-radius:5px; text-align:center;}
-    .positive {color:#28a745; font-weight:bold;}
-    .negative {color:#dc3545; font-weight:bold;}
-    .loading {text-align:center; color:#666; padding:20px;}
-    .error {text-align:center; color:#dc3545; padding:20px;}
-    .source {font-size:12px; color:#666; text-align:center; margin-top:10px;}
+    body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .header { background: #222; color: white; padding: 20px; border-radius: 8px; text-align: center; }
+    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 20px 0; }
+    .metric-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .metric-card h3 { margin: 0 0 15px 0; color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+    .metric-row { display: flex; justify-content: space-between; margin: 10px 0; padding: 8px 0; border-bottom: 1px solid #eee; }
+    .metric-label { font-weight: bold; color: #666; }
+    .metric-value { color: #333; }
+    .positive { color: #28a745; font-weight: bold; }
+    .negative { color: #dc3545; font-weight: bold; }
+    .loading { text-align: center; color: #666; padding: 40px; }
+    .error { text-align: center; color: #dc3545; padding: 20px; }
+    .price-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; }
+    .price-stat { background: #e9ecef; padding: 15px; border-radius: 5px; text-align: center; }
   </style>
 </head>
 <body>
@@ -22,159 +27,310 @@
     <div class="header">
       <h1 id="stock-symbol">Loading...</h1>
       <p id="company-name">&nbsp;</p>
+      <p id="source" style="font-size: 12px; opacity: 0.8;"></p>
     </div>
-    <div id="loading" class="loading">Fetching real-time data...</div>
+    
+    <div id="loading" class="loading">Fetching comprehensive stock data...</div>
     <div id="error" class="error" style="display:none;"></div>
-    <div id="stats" class="stats" style="display:none;">
-      <div class="stat">Price: <span id="price">-</span></div>
-      <div class="stat">Change: <span id="change">-</span></div>
-      <div class="stat">Change %: <span id="change-percent">-</span></div>
-      <div class="stat">Open: <span id="open">-</span></div>
-      <div class="stat">High: <span id="high">-</span></div>
-      <div class="stat">Low: <span id="low">-</span></div>
-      <div class="stat">Volume: <span id="volume">-</span></div>
+    
+    <div id="content" style="display:none;">
+      <!-- Current Price Stats -->
+      <div class="metric-card">
+        <h3>Current Market Data</h3>
+        <div class="price-stats">
+          <div class="price-stat">Price: <strong id="price">-</strong></div>
+          <div class="price-stat">Change: <strong id="change">-</strong></div>
+          <div class="price-stat">Change %: <strong id="change-percent">-</strong></div>
+          <div class="price-stat">Open: <strong id="open">-</strong></div>
+          <div class="price-stat">High: <strong id="high">-</strong></div>
+          <div class="price-stat">Low: <strong id="low">-</strong></div>
+          <div class="price-stat">Volume: <strong id="volume">-</strong></div>
+        </div>
+      </div>
+
+      <div class="metrics-grid">
+        <!-- Dividend Information -->
+        <div class="metric-card">
+          <h3>💰 Dividend Information</h3>
+          <div class="metric-row">
+            <span class="metric-label">Current Dividend Yield:</span>
+            <span class="metric-value" id="dividend-yield">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Annual Dividend Amount:</span>
+            <span class="metric-value" id="dividend-amount">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Ex-Dividend Date:</span>
+            <span class="metric-value" id="ex-dividend-date">-</span>
+          </div>
+        </div>
+
+        <!-- Stock Price CAGR -->
+        <div class="metric-card">
+          <h3>📈 Stock Price CAGR</h3>
+          <div class="metric-row">
+            <span class="metric-label">1 Year CAGR:</span>
+            <span class="metric-value" id="price-cagr-1y">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">3 Year CAGR:</span>
+            <span class="metric-value" id="price-cagr-3y">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">5 Year CAGR:</span>
+            <span class="metric-value" id="price-cagr-5y">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">10 Year CAGR:</span>
+            <span class="metric-value" id="price-cagr-10y">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">15 Year CAGR:</span>
+            <span class="metric-value" id="price-cagr-15y">-</span>
+          </div>
+        </div>
+
+        <!-- EPS Growth -->
+        <div class="metric-card">
+          <h3>💡 EPS Growth Rates</h3>
+          <div class="metric-row">
+            <span class="metric-label">Current EPS:</span>
+            <span class="metric-value" id="current-eps">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">1 Year EPS Growth:</span>
+            <span class="metric-value" id="eps-growth-1y">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">3 Year EPS CAGR:</span>
+            <span class="metric-value" id="eps-cagr-3y">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">5 Year EPS CAGR:</span>
+            <span class="metric-value" id="eps-cagr-5y">-</span>
+          </div>
+        </div>
+
+        <!-- Free Cash Flow -->
+        <div class="metric-card">
+          <h3>💵 Free Cash Flow</h3>
+          <div class="metric-row">
+            <span class="metric-label">Current FCF:</span>
+            <span class="metric-value" id="current-fcf">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">1 Year FCF Growth:</span>
+            <span class="metric-value" id="fcf-growth-1y">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">3 Year FCF CAGR:</span>
+            <span class="metric-value" id="fcf-cagr-3y">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">5 Year FCF CAGR:</span>
+            <span class="metric-value" id="fcf-cagr-5y">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">10 Year FCF CAGR:</span>
+            <span class="metric-value" id="fcf-cagr-10y">-</span>
+          </div>
+        </div>
+
+        <!-- Revenue -->
+        <div class="metric-card">
+          <h3>📊 Revenue Growth</h3>
+          <div class="metric-row">
+            <span class="metric-label">Current Revenue:</span>
+            <span class="metric-value" id="current-revenue">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">1 Year Revenue Growth:</span>
+            <span class="metric-value" id="revenue-growth-1y">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">3 Year Revenue CAGR:</span>
+            <span class="metric-value" id="revenue-cagr-3y">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">5 Year Revenue CAGR:</span>
+            <span class="metric-value" id="revenue-cagr-5y">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">10 Year Revenue CAGR:</span>
+            <span class="metric-value" id="revenue-cagr-10y">-</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">15 Year Revenue CAGR:</span>
+            <span class="metric-value" id="revenue-cagr-15y">-</span>
+          </div>
+        </div>
+      </div>
     </div>
-    <div id="source" class="source"></div>
   </div>
-  <script>
-    async function fetchFromAlphaVantage(symbol) {
-      const apiKey = '513N9J95UV8ZFFT1';
-      const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${apiKey}`;
+
+  <script type="module">
+    import { 
+      getCompanyOverview, 
+      getIncomeStatement, 
+      getCashFlow, 
+      getHistoricalPrices, 
+      globalQuote, 
+      fetchYahooData 
+    } from './js/api.js';
+    
+    import { 
+      calculatePriceCAGR, 
+      extractAnnualData, 
+      calculateGrowthCAGR 
+    } from './js/calculations.js';
+
+    function formatCurrency(value, currency = '$') {
+      if (!value || isNaN(value)) return '-';
+      return currency + Number(value).toLocaleString(undefined, {maximumFractionDigits: 2});
+    }
+
+    function formatPercentage(value) {
+      if (!value || isNaN(value)) return '-';
+      const formatted = (value * 100).toFixed(2) + '%';
+      return value >= 0 ? '+' + formatted : formatted;
+    }
+
+    function formatLargeNumber(value, currency = '$') {
+      if (!value || isNaN(value)) return '-';
+      const absValue = Math.abs(value);
+      let formatted;
       
-      try {
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        if (data['Note']) throw new Error('API limit reached');
-        if (!data['Global Quote'] || Object.keys(data['Global Quote']).length === 0) {
-          throw new Error('No data from Alpha Vantage');
-        }
-        
-        const quote = data['Global Quote'];
-        return {
-          symbol: quote['01. symbol'],
-          price: parseFloat(quote['05. price']),
-          change: parseFloat(quote['09. change']),
-          changePercent: parseFloat(quote['10. change percent'].replace('%', '')),
-          open: parseFloat(quote['02. open']),
-          high: parseFloat(quote['03. high']),
-          low: parseFloat(quote['04. low']),
-          volume: parseInt(quote['06. volume']),
-          currency: '$',
-          source: 'Alpha Vantage'
-        };
-      } catch (error) {
-        throw error;
+      if (absValue >= 1e12) formatted = (value / 1e12).toFixed(2) + 'T';
+      else if (absValue >= 1e9) formatted = (value / 1e9).toFixed(2) + 'B';
+      else if (absValue >= 1e6) formatted = (value / 1e6).toFixed(2) + 'M';
+      else if (absValue >= 1e3) formatted = (value / 1e3).toFixed(2) + 'K';
+      else formatted = value.toFixed(2);
+      
+      return currency + formatted;
+    }
+
+    function updateElement(id, value, isPercentage = false, isCurrency = false, currency = '$') {
+      const element = document.getElementById(id);
+      if (!element) return;
+      
+      if (isCurrency) {
+        element.textContent = formatLargeNumber(value, currency);
+      } else if (isPercentage) {
+        element.textContent = formatPercentage(value);
+        element.className = value >= 0 ? 'positive' : 'negative';
+      } else {
+        element.textContent = value || '-';
       }
     }
 
-    async function fetchFromYahooFinance(symbol) {
+    async function loadStockData(symbol) {
       try {
-        // Try direct Yahoo Finance API call via proxy
-        const proxyUrl = 'https://api.allorigins.win/raw?url=';
-        const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
-        const response = await fetch(proxyUrl + encodeURIComponent(yahooUrl));
-        const data = await response.json();
+        document.getElementById('loading').textContent = `Loading data for ${symbol}...`;
         
-        if (data?.chart?.result?.[0]) {
-          const result = data.chart.result[0];
-          const meta = result.meta;
-          
-          const currentPrice = meta.regularMarketPrice || meta.previousClose;
-          const previousClose = meta.previousClose;
-          const change = currentPrice - previousClose;
-          const changePercent = ((change / previousClose) * 100);
-          
-          return {
-            symbol: symbol,
-            price: currentPrice,
-            change: change,
-            changePercent: changePercent,
-            open: meta.regularMarketOpen,
-            high: meta.regularMarketDayHigh,
-            low: meta.regularMarketDayLow,
-            volume: meta.regularMarketVolume || 0,
-            currency: symbol.includes('.NS') ? '₹' : '$',
-            source: 'Yahoo Finance'
+        let currentData, overview, incomeStatement, cashFlow, historicalPrices;
+        const currency = symbol.includes('.NS') ? '₹' : '$';
+        
+        // Fetch current price data
+        if (symbol.includes('.NS') || symbol.includes('.BO')) {
+          currentData = await fetchYahooData(symbol);
+          document.getElementById('source').textContent = 'Data source: Yahoo Finance (Indian Stock)';
+        } else {
+          const quote = await globalQuote(symbol);
+          currentData = {
+            price: parseFloat(quote['05. price']),
+            change: parseFloat(quote['09. change']),
+            changePercent: parseFloat(quote['10. change percent'].replace('%', '')),
+            open: parseFloat(quote['02. open']),
+            high: parseFloat(quote['03. high']),
+            low: parseFloat(quote['04. low']),
+            volume: parseInt(quote['06. volume']),
+            currency: '$'
           };
+          document.getElementById('source').textContent = 'Data source: Alpha Vantage';
         }
-        throw new Error('No data from Yahoo Finance');
+
+        // Update current price display
+        document.getElementById('price').textContent = formatCurrency(currentData.price, currency);
+        updateElement('change', currentData.change, false, true, currency);
+        updateElement('change-percent', currentData.changePercent / 100, true);
+        updateElement('open', currentData.open, false, true, currency);
+        updateElement('high', currentData.high, false, true, currency);
+        updateElement('low', currentData.low, false, true, currency);
+        updateElement('volume', currentData.volume?.toLocaleString());
+
+        // For US stocks, get detailed fundamental data
+        if (!symbol.includes('.NS') && !symbol.includes('.BO')) {
+          try {
+            overview = await getCompanyOverview(symbol);
+            incomeStatement = await getIncomeStatement(symbol);
+            cashFlow = await getCashFlow(symbol);
+            historicalPrices = await getHistoricalPrices(symbol);
+
+            // Update dividend information
+            updateElement('dividend-yield', overview.DividendYield || 'N/A');
+            updateElement('dividend-amount', overview.DividendPerShare, false, true, currency);
+            updateElement('ex-dividend-date', overview.ExDividendDate || 'N/A');
+
+            // Calculate and update price CAGR
+            [1, 3, 5, 10, 15].forEach(years => {
+              const cagr = calculatePriceCAGR(historicalPrices, years);
+              updateElement(`price-cagr-${years}y`, cagr, true);
+            });
+
+            // Update EPS data
+            const epsData = extractAnnualData(incomeStatement, 'reportedEPS');
+            updateElement('current-eps', epsData[0]?.value, false, true, currency);
+            [1, 3, 5].forEach(years => {
+              const growth = calculateGrowthCAGR(epsData, years);
+              updateElement(`eps-${years === 1 ? 'growth-1y' : `cagr-${years}y`}`, growth, true);
+            });
+
+            // Update FCF data
+            const fcfData = extractAnnualData(cashFlow, 'operatingCashflow');
+            updateElement('current-fcf', fcfData[0]?.value, false, true, currency);
+            [1, 3, 5, 10].forEach(years => {
+              const growth = calculateGrowthCAGR(fcfData, years);
+              updateElement(`fcf-${years === 1 ? 'growth-1y' : `cagr-${years}y`}`, growth, true);
+            });
+
+            // Update Revenue data
+            const revenueData = extractAnnualData(incomeStatement, 'totalRevenue');
+            updateElement('current-revenue', revenueData[0]?.value, false, true, currency);
+            [1, 3, 5, 10, 15].forEach(years => {
+              const growth = calculateGrowthCAGR(revenueData, years);
+              updateElement(`revenue-${years === 1 ? 'growth-1y' : `cagr-${years}y`}`, growth, true);
+            });
+
+          } catch (fundamentalError) {
+            console.log('Could not fetch fundamental data:', fundamentalError.message);
+            document.getElementById('source').textContent += ' (Fundamental data unavailable)';
+          }
+        } else {
+          // For Indian stocks, show message about limited data
+          document.getElementById('source').textContent += ' (Fundamental data limited for Indian stocks)';
+        }
+
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('content').style.display = 'block';
+        
       } catch (error) {
-        throw error;
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = `Error loading data: ${error.message}`;
       }
     }
 
-    async function fetchStockData(symbol) {
-      // Try Alpha Vantage for US stocks first
-      if (!symbol.includes('.NS') && !symbol.includes('.BO')) {
-        try {
-          return await fetchFromAlphaVantage(symbol);
-        } catch (error) {
-          console.log('Alpha Vantage failed, trying Yahoo Finance:', error.message);
-        }
-      }
-      
-      // For Indian stocks (.NS) or if Alpha Vantage fails, use Yahoo Finance
-      try {
-        return await fetchFromYahooFinance(symbol);
-      } catch (error) {
-        console.log('Yahoo Finance failed:', error.message);
-        throw new Error(`Unable to fetch data for ${symbol}`);
-      }
-    }
-    
-    function formatNumber(value) {
-      if (value == null || isNaN(value)) return '-';
-      return value.toLocaleString(undefined, {maximumFractionDigits: 2});
-    }
-    
-    function updateDashboard(data, symbol) {
-      document.getElementById('loading').style.display = 'none';
-      
-      if (!data) {
-        document.getElementById('error').style.display = 'block';
-        document.getElementById('error').textContent = `Unable to load data for ${symbol}`;
-        return;
-      }
-      
-      document.getElementById('stats').style.display = 'grid';
-      document.getElementById('stock-symbol').textContent = data.symbol;
-      document.getElementById('company-name').textContent = `Real-time Stock Data`;
-      document.getElementById('source').textContent = `Data source: ${data.source}`;
-      
-      document.getElementById('price').textContent = data.currency + formatNumber(data.price);
-      
-      const changeEl = document.getElementById('change');
-      const changePercentEl = document.getElementById('change-percent');
-      
-      changeEl.textContent = (data.change >= 0 ? '+' : '') + data.currency + formatNumber(Math.abs(data.change));
-      changePercentEl.textContent = (data.changePercent >= 0 ? '+' : '') + formatNumber(data.changePercent) + '%';
-      
-      const isPositive = data.change >= 0;
-      changeEl.className = changePercentEl.className = isPositive ? 'positive' : 'negative';
-      
-      document.getElementById('open').textContent = data.currency + formatNumber(data.open);
-      document.getElementById('high').textContent = data.currency + formatNumber(data.high);
-      document.getElementById('low').textContent = data.currency + formatNumber(data.low);
-      document.getElementById('volume').textContent = formatNumber(data.volume);
-    }
-    
     async function main() {
       const urlParams = new URLSearchParams(window.location.search);
       const symbol = urlParams.get('symbol') || 'AAPL';
       
       document.getElementById('stock-symbol').textContent = symbol;
+      document.title = `${symbol} - Stock Analysis Dashboard`;
       
-      try {
-        const data = await fetchStockData(symbol);
-        updateDashboard(data, symbol);
-      } catch (error) {
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('error').style.display = 'block';
-        document.getElementById('error').textContent = error.message;
-      }
+      await loadStockData(symbol);
     }
-    
+
     window.onload = main;
   </script>
 </body>
