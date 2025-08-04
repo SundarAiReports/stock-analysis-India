@@ -14,6 +14,7 @@
     .negative {color:#dc3545; font-weight:bold;}
     .loading {text-align:center; color:#666; padding:20px;}
     .error {text-align:center; color:#dc3545; padding:20px;}
+    .source {font-size:12px; color:#666; text-align:center; margin-top:10px;}
   </style>
 </head>
 <body>
@@ -33,25 +34,20 @@
       <div class="stat">Low: <span id="low">-</span></div>
       <div class="stat">Volume: <span id="volume">-</span></div>
     </div>
+    <div id="source" class="source"></div>
   </div>
   <script>
-    async function fetchStockData(symbol) {
-      const apiKey = '513N9J95UV8ZFFT1'; // Your Alpha Vantage API key
+    async function fetchFromAlphaVantage(symbol) {
+      const apiKey = '513N9J95UV8ZFFT1';
       const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${apiKey}`;
       
       try {
-        console.log(`Fetching: ${url}`);
         const response = await fetch(url);
         const data = await response.json();
         
-        console.log('Response:', data);
-        
-        if (data['Note']) {
-          throw new Error('API limit reached. Please try again later.');
-        }
-        
+        if (data['Note']) throw new Error('API limit reached');
         if (!data['Global Quote'] || Object.keys(data['Global Quote']).length === 0) {
-          throw new Error(`No data found for symbol: ${symbol}`);
+          throw new Error('No data from Alpha Vantage');
         }
         
         const quote = data['Global Quote'];
@@ -64,11 +60,66 @@
           high: parseFloat(quote['03. high']),
           low: parseFloat(quote['04. low']),
           volume: parseInt(quote['06. volume']),
-          previousClose: parseFloat(quote['08. previous close'])
+          currency: '$',
+          source: 'Alpha Vantage'
         };
       } catch (error) {
-        console.error('Fetch error:', error);
         throw error;
+      }
+    }
+
+    async function fetchFromYahooFinance(symbol) {
+      try {
+        // Try direct Yahoo Finance API call via proxy
+        const proxyUrl = 'https://api.allorigins.win/raw?url=';
+        const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
+        const response = await fetch(proxyUrl + encodeURIComponent(yahooUrl));
+        const data = await response.json();
+        
+        if (data?.chart?.result?.[0]) {
+          const result = data.chart.result[0];
+          const meta = result.meta;
+          
+          const currentPrice = meta.regularMarketPrice || meta.previousClose;
+          const previousClose = meta.previousClose;
+          const change = currentPrice - previousClose;
+          const changePercent = ((change / previousClose) * 100);
+          
+          return {
+            symbol: symbol,
+            price: currentPrice,
+            change: change,
+            changePercent: changePercent,
+            open: meta.regularMarketOpen,
+            high: meta.regularMarketDayHigh,
+            low: meta.regularMarketDayLow,
+            volume: meta.regularMarketVolume || 0,
+            currency: symbol.includes('.NS') ? '₹' : '$',
+            source: 'Yahoo Finance'
+          };
+        }
+        throw new Error('No data from Yahoo Finance');
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    async function fetchStockData(symbol) {
+      // Try Alpha Vantage for US stocks first
+      if (!symbol.includes('.NS') && !symbol.includes('.BO')) {
+        try {
+          return await fetchFromAlphaVantage(symbol);
+        } catch (error) {
+          console.log('Alpha Vantage failed, trying Yahoo Finance:', error.message);
+        }
+      }
+      
+      // For Indian stocks (.NS) or if Alpha Vantage fails, use Yahoo Finance
+      try {
+        return await fetchFromYahooFinance(symbol);
+      } catch (error) {
+        console.log('Yahoo Finance failed:', error.message);
+        throw new Error(`Unable to fetch data for ${symbol}`);
       }
     }
     
@@ -88,22 +139,23 @@
       
       document.getElementById('stats').style.display = 'grid';
       document.getElementById('stock-symbol').textContent = data.symbol;
-      document.getElementById('company-name').textContent = 'Real-time Data via Alpha Vantage';
+      document.getElementById('company-name').textContent = `Real-time Stock Data`;
+      document.getElementById('source').textContent = `Data source: ${data.source}`;
       
-      document.getElementById('price').textContent = '$' + formatNumber(data.price);
+      document.getElementById('price').textContent = data.currency + formatNumber(data.price);
       
       const changeEl = document.getElementById('change');
       const changePercentEl = document.getElementById('change-percent');
       
-      changeEl.textContent = (data.change >= 0 ? '+' : '') + '$' + formatNumber(Math.abs(data.change));
+      changeEl.textContent = (data.change >= 0 ? '+' : '') + data.currency + formatNumber(Math.abs(data.change));
       changePercentEl.textContent = (data.changePercent >= 0 ? '+' : '') + formatNumber(data.changePercent) + '%';
       
       const isPositive = data.change >= 0;
       changeEl.className = changePercentEl.className = isPositive ? 'positive' : 'negative';
       
-      document.getElementById('open').textContent = '$' + formatNumber(data.open);
-      document.getElementById('high').textContent = '$' + formatNumber(data.high);
-      document.getElementById('low').textContent = '$' + formatNumber(data.low);
+      document.getElementById('open').textContent = data.currency + formatNumber(data.open);
+      document.getElementById('high').textContent = data.currency + formatNumber(data.high);
+      document.getElementById('low').textContent = data.currency + formatNumber(data.low);
       document.getElementById('volume').textContent = formatNumber(data.volume);
     }
     
