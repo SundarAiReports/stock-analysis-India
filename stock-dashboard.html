@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Stock Dashboard</title>
+  <title>Stock Dashboard - Multi-Market</title>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
@@ -30,7 +30,7 @@
       <p id="source" style="font-size: 12px; opacity: 0.8;"></p>
     </div>
     
-    <div id="loading" class="loading">Fetching comprehensive financial data from TwelveData...</div>
+    <div id="loading" class="loading">Fetching comprehensive stock data...</div>
     <div id="error" class="error" style="display:none;"></div>
     
     <div id="content" style="display:none;">
@@ -63,14 +63,6 @@
           <div class="metric-row">
             <span class="metric-label">Ex-Dividend Date:</span>
             <span class="metric-value" id="ex-dividend-date">-</span>
-          </div>
-          <div class="metric-row">
-            <span class="metric-label">Dividend CAGR (3Y):</span>
-            <span class="metric-value" id="dividend-cagr-3y">-</span>
-          </div>
-          <div class="metric-row">
-            <span class="metric-label">Dividend CAGR (5Y):</span>
-            <span class="metric-value" id="dividend-cagr-5y">-</span>
           </div>
         </div>
 
@@ -178,19 +170,16 @@
   </div>
 
   <script>
-    const TD_API_KEY = '9ab46115418746939c700a4735fffbbb'; // Replace with your key
-    const CACHE = {};
+    const TD_API_KEY = 'demo'; // Replace with your TwelveData API key
 
+    function isIndianStock(symbol) {
+      return symbol.includes('.NS') || symbol.includes('.BO');
+    }
+
+    // TwelveData API calls
     async function tdCall(endpoint, params = {}) {
       const paramString = new URLSearchParams({...params, apikey: TD_API_KEY}).toString();
-      const cacheKey = `${endpoint}?${paramString}`;
-      
-      if (CACHE[cacheKey] && Date.now() - CACHE[cacheKey].timestamp < 300000) {
-        return CACHE[cacheKey].data;
-      }
-      
       const url = `https://api.twelvedata.com/${endpoint}?${paramString}`;
-      console.log('Fetching:', url);
       
       const response = await fetch(url);
       const data = await response.json();
@@ -199,8 +188,61 @@
         throw new Error(data.message || 'TwelveData API error');
       }
       
-      CACHE[cacheKey] = { data, timestamp: Date.now() };
       return data;
+    }
+
+    // Yahoo Finance API calls (for Indian stocks)
+    async function yahooCall(symbol) {
+      const proxyUrl = 'https://api.allorigins.win/raw?url=';
+      const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
+      
+      const response = await fetch(proxyUrl + encodeURIComponent(yahooUrl));
+      const data = await response.json();
+      
+      if (!data?.chart?.result?.[0]) {
+        throw new Error('No data from Yahoo Finance');
+      }
+      
+      return data.chart.result[0];
+    }
+
+    async function getYahooQuote(symbol) {
+      const data = await yahooCall(symbol);
+      const meta = data.meta;
+      
+      return {
+        close: meta.regularMarketPrice || meta.previousClose,
+        change: meta.regularMarketPrice - meta.previousClose,
+        percent_change: ((meta.regularMarketPrice - meta.previousClose) / meta.previousClose) * 100,
+        open: meta.regularMarketOpen,
+        high: meta.regularMarketDayHigh,
+        low: meta.regularMarketDayLow,
+        volume: meta.regularMarketVolume || 0
+      };
+    }
+
+    async function getYahooHistoricalData(symbol, years = 15) {
+      const endDate = Math.floor(Date.now() / 1000);
+      const startDate = endDate - (years * 365 * 24 * 60 * 60);
+      
+      const proxyUrl = 'https://api.allorigins.win/raw?url=';
+      const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${startDate}&period2=${endDate}&interval=1d`;
+      
+      const response = await fetch(proxyUrl + encodeURIComponent(yahooUrl));
+      const data = await response.json();
+      
+      if (!data?.chart?.result?.[0]?.timestamp) {
+        throw new Error('No historical data from Yahoo Finance');
+      }
+      
+      const result = data.chart.result[0];
+      const timestamps = result.timestamp;
+      const prices = result.indicators.adjclose[0].adjclose;
+      
+      return timestamps.map((timestamp, index) => ({
+        date: new Date(timestamp * 1000).toISOString().split('T')[0],
+        close: prices[index]
+      })).filter(item => item.close !== null);
     }
 
     function calculateCAGR(startValue, endValue, years) {
@@ -208,7 +250,7 @@
       return Math.pow(endValue / startValue, 1 / years) - 1;
     }
 
-    function formatCurrency(value, currency = '$', symbol = '') {
+    function formatCurrency(value, currency = '$') {
       if (!value || isNaN(value)) return '-';
       const absValue = Math.abs(value);
       let formatted;
@@ -245,14 +287,24 @@
     async function loadStockData(symbol) {
       try {
         console.log('Loading comprehensive data for:', symbol);
-        document.getElementById('loading').textContent = `Loading data for ${symbol}...`;
         
-        const currency = symbol.includes('.NS') ? '₹' : '$';
-        
+        const isIndian = isIndianStock(symbol);
+        const currency = isIndian ? '₹' : '$';
+        let dataSource = '';
+
         // 1. Get Current Quote
-        console.log('Fetching quote...');
-        const quote = await tdCall('quote', { symbol });
+        let quote;
+        if (isIndian) {
+          console.log('Fetching Indian stock data from Yahoo Finance...');
+          quote = await getYahooQuote(symbol);
+          dataSource = 'Yahoo Finance (Indian Stock)';
+        } else {
+          console.log('Fetching US stock data from TwelveData...');
+          quote = await tdCall('quote', { symbol });
+          dataSource = 'TwelveData';
+        }
         
+        // Update current price display
         document.getElementById('price').textContent = formatCurrency(parseFloat(quote.close), currency);
         updateElement('change', parseFloat(quote.change), false, true, currency);
         updateElement('change-percent', parseFloat(quote.percent_change) / 100, true);
@@ -261,140 +313,107 @@
         updateElement('low', parseFloat(quote.low), false, true, currency);
         updateElement('volume', parseInt(quote.volume)?.toLocaleString());
 
-        // Skip fundamental data for Indian stocks
-        if (symbol.includes('.NS') || symbol.includes('.BO')) {
-          document.getElementById('source').textContent = 'Data source: TwelveData (Price data only for Indian stocks)';
-          document.getElementById('loading').style.display = 'none';
-          document.getElementById('content').style.display = 'block';
-          return;
-        }
-
         // 2. Get Historical Price Data for CAGR
-        console.log('Fetching historical prices...');
-        const historicalData = await tdCall('time_series', { 
-          symbol, 
-          interval: '1day', 
-          outputsize: 5000 
-        });
+        let historicalData;
+        if (isIndian) {
+          console.log('Fetching Indian historical price data...');
+          historicalData = await getYahooHistoricalData(symbol);
+        } else {
+          console.log('Fetching US historical price data...');
+          const tdHistorical = await tdCall('time_series', { 
+            symbol, 
+            interval: '1day', 
+            outputsize: 5000 
+          });
+          historicalData = tdHistorical.values ? tdHistorical.values.reverse() : [];
+        }
         
-        if (historicalData.values) {
-          const prices = historicalData.values.reverse(); // oldest to newest
-          const currentPrice = parseFloat(prices[prices.length - 1].close);
+        if (historicalData.length > 0) {
+          const currentPrice = parseFloat(historicalData[historicalData.length - 1].close);
+          
+          console.log(`Processing ${historicalData.length} historical price points`);
           
           // Calculate Price CAGR
           [1, 3, 5, 10, 15].forEach(years => {
             const daysBack = years * 252; // trading days
-            if (prices.length > daysBack) {
-              const historicalPrice = parseFloat(prices[prices.length - 1 - daysBack].close);
+            if (historicalData.length > daysBack) {
+              const historicalPrice = parseFloat(historicalData[historicalData.length - 1 - daysBack].close);
               const cagr = calculateCAGR(historicalPrice, currentPrice, years);
               updateElement(`price-cagr-${years}y`, cagr, true);
+              console.log(`${years}Y Price CAGR: ${(cagr * 100).toFixed(2)}%`);
             }
           });
         }
 
-        // 3. Get Dividend Data
-        console.log('Fetching dividends...');
-        try {
-          const dividends = await tdCall('dividends', { symbol });
-          if (dividends && dividends.length > 0) {
-            const latestDiv = dividends[0];
-            const annualDividend = dividends.slice(0, 4).reduce((sum, div) => sum + parseFloat(div.amount || 0), 0);
-            const dividendYield = (annualDividend / currentPrice) * 100;
-            
-            updateElement('dividend-yield', dividendYield + '%');
-            updateElement('dividend-amount', annualDividend, false, true, currency);
-            updateElement('ex-dividend-date', latestDiv.ex_date || 'N/A');
-            
-            // Calculate Dividend CAGR
-            if (dividends.length >= 36) { // 3 years of monthly data
-              const div3YearsAgo = parseFloat(dividends[35]?.amount || 0);
-              const divCagr3Y = calculateCAGR(div3YearsAgo, parseFloat(latestDiv.amount), 3);
-              updateElement('dividend-cagr-3y', divCagr3Y, true);
+        // 3. Fundamental Data (US stocks only via TwelveData)
+        if (!isIndian) {
+          console.log('Fetching fundamental data for US stock...');
+          
+          // Dividends
+          try {
+            const dividends = await tdCall('dividends', { symbol });
+            if (dividends && Array.isArray(dividends) && dividends.length > 0) {
+              const latestDiv = dividends[0];
+              const annualDividend = dividends.slice(0, 4).reduce((sum, div) => sum + parseFloat(div.amount || 0), 0);
+              const dividendYield = (annualDividend / parseFloat(quote.close)) * 100;
+              
+              updateElement('dividend-yield', dividendYield + '%');
+              updateElement('dividend-amount', annualDividend, false, true, currency);
+              updateElement('ex-dividend-date', latestDiv.ex_date || 'N/A');
             }
-            
-            if (dividends.length >= 60) { // 5 years
-              const div5YearsAgo = parseFloat(dividends[59]?.amount || 0);
-              const divCagr5Y = calculateCAGR(div5YearsAgo, parseFloat(latestDiv.amount), 5);
-              updateElement('dividend-cagr-5y', divCagr5Y, true);
-            }
-          }
-        } catch (divError) {
-          console.log('Dividend data not available:', divError.message);
-        }
-
-        // 4. Get Earnings Data
-        console.log('Fetching earnings...');
-        try {
-          const earnings = await tdCall('earnings', { symbol });
-          if (earnings && earnings.length > 0) {
-            const latestEarnings = earnings[0];
-            updateElement('current-eps', latestEarnings.eps_actual, false, true, currency);
-            
-            // Calculate EPS growth
-            if (earnings.length >= 4) { // 1 year of quarterly data
-              const eps1YearAgo = parseFloat(earnings[3]?.eps_actual || 0);
-              const currentEPS = parseFloat(latestEarnings.eps_actual || 0);
-              const epsGrowth1Y = calculateCAGR(eps1YearAgo, currentEPS, 1);
-              updateElement('eps-growth-1y', epsGrowth1Y, true);
-            }
-            
-            // 3 and 5 year EPS CAGR
-            [3, 5].forEach(years => {
-              const quartersBack = years * 4;
-              if (earnings.length >= quartersBack) {
-                const epsHistorical = parseFloat(earnings[quartersBack - 1]?.eps_actual || 0);
-                const cagr = calculateCAGR(epsHistorical, parseFloat(latestEarnings.eps_actual), years);
-                updateElement(`eps-cagr-${years}y`, cagr, true);
-              }
-            });
-          }
-        } catch (earningsError) {
-          console.log('Earnings data not available:', earningsError.message);
-        }
-
-        // 5. Get Financial Statements (Cash Flow & Income Statement)
-        console.log('Fetching financial statements...');
-        try {
-          // Cash Flow Statement
-          const cashFlow = await tdCall('cash_flow', { symbol });
-          if (cashFlow && cashFlow.length > 0) {
-            const latestCF = cashFlow[0];
-            const fcf = parseFloat(latestCF.free_cash_flow || latestCF.operating_cash_flow || 0);
-            updateElement('current-fcf', fcf, false, true, currency);
-            
-            // FCF Growth CAGR
-            [1, 3, 5, 10].forEach(years => {
-              if (cashFlow.length > years) {
-                const historicalFCF = parseFloat(cashFlow[years]?.free_cash_flow || cashFlow[years]?.operating_cash_flow || 0);
-                const cagr = calculateCAGR(historicalFCF, fcf, years);
-                updateElement(`fcf-${years === 1 ? 'growth-1y' : `cagr-${years}y`}`, cagr, true);
-              }
-            });
+          } catch (error) {
+            console.log('Dividend data not available:', error.message);
           }
 
-          // Income Statement for Revenue
-          const incomeStatement = await tdCall('income_statement', { symbol });
-          if (incomeStatement && incomeStatement.length > 0) {
-            const latestIncome = incomeStatement[0];
-            const revenue = parseFloat(latestIncome.total_revenue || 0);
-            updateElement('current-revenue', revenue, false, true, currency);
-            
-            // Revenue Growth CAGR
-            [1, 3, 5, 10, 15].forEach(years => {
-              if (incomeStatement.length > years) {
-                const historicalRevenue = parseFloat(incomeStatement[years]?.total_revenue || 0);
-                const cagr = calculateCAGR(historicalRevenue, revenue, years);
-                updateElement(`revenue-${years === 1 ? 'growth-1y' : `cagr-${years}y`}`, cagr, true);
+          // Earnings
+          try {
+            const earnings = await tdCall('earnings', { symbol });
+            if (earnings && Array.isArray(earnings) && earnings.length > 0) {
+              const latestEarnings = earnings[0];
+              updateElement('current-eps', latestEarnings.eps_actual, false, true, currency);
+              
+              if (earnings.length >= 4) {
+                const eps1YearAgo = parseFloat(earnings[3]?.eps_actual || 0);
+                const currentEPS = parseFloat(latestEarnings.eps_actual || 0);
+                const epsGrowth1Y = calculateCAGR(eps1YearAgo, currentEPS, 1);
+                updateElement('eps-growth-1y', epsGrowth1Y, true);
               }
-            });
+            }
+          } catch (error) {
+            console.log('Earnings data not available:', error.message);
           }
-        } catch (statementsError) {
-          console.log('Financial statements not available:', statementsError.message);
+
+          // Cash Flow
+          try {
+            const cashFlow = await tdCall('cash_flow', { symbol });
+            if (cashFlow && Array.isArray(cashFlow) && cashFlow.length > 0) {
+              const latestCF = cashFlow[0];
+              const fcf = parseFloat(latestCF.free_cash_flow || latestCF.operating_cash_flow || 0);
+              updateElement('current-fcf', fcf, false, true, currency);
+            }
+          } catch (error) {
+            console.log('Cash flow data not available:', error.message);
+          }
+
+          // Revenue
+          try {
+            const incomeStatement = await tdCall('income_statement', { symbol });
+            if (incomeStatement && Array.isArray(incomeStatement) && incomeStatement.length > 0) {
+              const latestIncome = incomeStatement[0];
+              const revenue = parseFloat(latestIncome.total_revenue || 0);
+              updateElement('current-revenue', revenue, false, true, currency);
+            }
+          } catch (error) {
+            console.log('Revenue data not available:', error.message);
+          }
+        } else {
+          console.log('Skipping fundamental data for Indian stock (not available)');
+          dataSource += ' (Price data only - Fundamental data limited for Indian stocks)';
         }
 
         document.getElementById('loading').style.display = 'none';
         document.getElementById('content').style.display = 'block';
-        document.getElementById('source').textContent = 'Data source: TwelveData API';
+        document.getElementById('source').textContent = `Data source: ${dataSource}`;
         
         console.log('Data loading completed successfully');
         
@@ -411,7 +430,7 @@
       const symbol = urlParams.get('symbol') || 'AAPL';
       
       document.getElementById('stock-symbol').textContent = symbol;
-      document.title = `${symbol} - Comprehensive Stock Analysis`;
+      document.title = `${symbol} - Multi-Market Stock Analysis`;
       
       await loadStockData(symbol);
     }
