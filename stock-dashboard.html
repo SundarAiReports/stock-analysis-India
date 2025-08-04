@@ -169,169 +169,230 @@
     </div>
   </div>
 
-  <script type="module">
-    import { 
-      getCompanyOverview, 
-      getIncomeStatement, 
-      getCashFlow, 
-      getHistoricalPrices, 
-      globalQuote, 
-      fetchYahooData 
-    } from './js/api.js';
+  <script>
+  // Inline all functions to avoid module loading issues
+  const API_KEY = '513N9J95UV8ZFFT1';
+  const CACHE = {};
+  
+  async function avCall(params) {
+    const cacheKey = params;
+    if (CACHE[cacheKey] && Date.now() - CACHE[cacheKey].timestamp < 300000) {
+      return CACHE[cacheKey].data;
+    }
     
-    import { 
-      calculatePriceCAGR, 
-      extractAnnualData, 
-      calculateGrowthCAGR 
-    } from './js/calculations.js';
-
-    function formatCurrency(value, currency = '$') {
-      if (!value || isNaN(value)) return '-';
-      return currency + Number(value).toLocaleString(undefined, {maximumFractionDigits: 2});
+    const url = `https://www.alphavantage.co/query?apikey=${API_KEY}&${params}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (data.Note) throw new Error('Alpha Vantage rate limit reached');
+    if (data.Information) throw new Error(data.Information);
+    
+    CACHE[cacheKey] = { data, timestamp: Date.now() };
+    return data;
+  }
+  
+  async function getCompanyOverview(symbol) {
+    return await avCall(`function=OVERVIEW&symbol=${symbol}`);
+  }
+  
+  async function getIncomeStatement(symbol) {
+    return await avCall(`function=INCOME_STATEMENT&symbol=${symbol}`);
+  }
+  
+  async function getCashFlow(symbol) {
+    return await avCall(`function=CASH_FLOW&symbol=${symbol}`);
+  }
+  
+  async function getHistoricalPrices(symbol) {
+    const data = await avCall(`function=TIME_SERIES_DAILY_ADJUSTED&symbol=${symbol}&outputsize=full`);
+    return data['Time Series (Daily)'];
+  }
+  
+  async function globalQuote(symbol) {
+    const data = await avCall(`function=GLOBAL_QUOTE&symbol=${symbol}`);
+    return data['Global Quote'];
+  }
+  
+  function calculateCAGR(startValue, endValue, years) {
+    if (!startValue || !endValue || years <= 0) return null;
+    return Math.pow(endValue / startValue, 1 / years) - 1;
+  }
+  
+  function extractAnnualData(statements, field) {
+    const annualReports = statements.annualReports || [];
+    return annualReports.map(report => ({
+      date: report.fiscalDateEnding,
+      value: parseFloat(report[field]) || 0
+    })).sort((a, b) => new Date(b.date) - new Date(a.date));
+  }
+  
+  function calculateGrowthCAGR(data, years) {
+    if (data.length < years + 1) return null;
+    const current = data[0].value;
+    const historical = data[years].value;
+    return calculateCAGR(historical, current, years);
+  }
+  
+  function formatCurrency(value, currency = '$') {
+    if (!value || isNaN(value)) return '-';
+    return currency + Number(value).toLocaleString(undefined, {maximumFractionDigits: 2});
+  }
+  
+  function formatPercentage(value) {
+    if (!value || isNaN(value)) return '-';
+    const formatted = (value * 100).toFixed(2) + '%';
+    return value >= 0 ? '+' + formatted : formatted;
+  }
+  
+  function formatLargeNumber(value, currency = '$') {
+    if (!value || isNaN(value)) return '-';
+    const absValue = Math.abs(value);
+    let formatted;
+    
+    if (absValue >= 1e12) formatted = (value / 1e12).toFixed(2) + 'T';
+    else if (absValue >= 1e9) formatted = (value / 1e9).toFixed(2) + 'B';
+    else if (absValue >= 1e6) formatted = (value / 1e6).toFixed(2) + 'M';
+    else if (absValue >= 1e3) formatted = (value / 1e3).toFixed(2) + 'K';
+    else formatted = value.toFixed(2);
+    
+    return currency + formatted;
+  }
+  
+  function updateElement(id, value, isPercentage = false, isCurrency = false, currency = '$') {
+    const element = document.getElementById(id);
+    if (!element) return;
+    
+    if (isCurrency) {
+      element.textContent = formatLargeNumber(value, currency);
+    } else if (isPercentage) {
+      element.textContent = formatPercentage(value);
+      element.className = value >= 0 ? 'positive' : 'negative';
+    } else {
+      element.textContent = value || '-';
     }
-
-    function formatPercentage(value) {
-      if (!value || isNaN(value)) return '-';
-      const formatted = (value * 100).toFixed(2) + '%';
-      return value >= 0 ? '+' + formatted : formatted;
-    }
-
-    function formatLargeNumber(value, currency = '$') {
-      if (!value || isNaN(value)) return '-';
-      const absValue = Math.abs(value);
-      let formatted;
+  }
+  
+  async function loadStockData(symbol) {
+    try {
+      console.log('Loading data for:', symbol);
+      document.getElementById('loading').textContent = `Loading data for ${symbol}...`;
       
-      if (absValue >= 1e12) formatted = (value / 1e12).toFixed(2) + 'T';
-      else if (absValue >= 1e9) formatted = (value / 1e9).toFixed(2) + 'B';
-      else if (absValue >= 1e6) formatted = (value / 1e6).toFixed(2) + 'M';
-      else if (absValue >= 1e3) formatted = (value / 1e3).toFixed(2) + 'K';
-      else formatted = value.toFixed(2);
+      const currency = '$';
       
-      return currency + formatted;
-    }
-
-    function updateElement(id, value, isPercentage = false, isCurrency = false, currency = '$') {
-      const element = document.getElementById(id);
-      if (!element) return;
+      // Get current quote
+      const quote = await globalQuote(symbol);
+      console.log('Quote data:', quote);
       
-      if (isCurrency) {
-        element.textContent = formatLargeNumber(value, currency);
-      } else if (isPercentage) {
-        element.textContent = formatPercentage(value);
-        element.className = value >= 0 ? 'positive' : 'negative';
-      } else {
-        element.textContent = value || '-';
-      }
-    }
-
-    async function loadStockData(symbol) {
-      try {
-        document.getElementById('loading').textContent = `Loading data for ${symbol}...`;
-        
-        let currentData, overview, incomeStatement, cashFlow, historicalPrices;
-        const currency = symbol.includes('.NS') ? '₹' : '$';
-        
-        // Fetch current price data
-        if (symbol.includes('.NS') || symbol.includes('.BO')) {
-          currentData = await fetchYahooData(symbol);
-          document.getElementById('source').textContent = 'Data source: Yahoo Finance (Indian Stock)';
-        } else {
-          const quote = await globalQuote(symbol);
-          currentData = {
-            price: parseFloat(quote['05. price']),
-            change: parseFloat(quote['09. change']),
-            changePercent: parseFloat(quote['10. change percent'].replace('%', '')),
-            open: parseFloat(quote['02. open']),
-            high: parseFloat(quote['03. high']),
-            low: parseFloat(quote['04. low']),
-            volume: parseInt(quote['06. volume']),
-            currency: '$'
-          };
-          document.getElementById('source').textContent = 'Data source: Alpha Vantage';
+      const currentData = {
+        price: parseFloat(quote['05. price']),
+        change: parseFloat(quote['09. change']),
+        changePercent: parseFloat(quote['10. change percent'].replace('%', '')),
+        open: parseFloat(quote['02. open']),
+        high: parseFloat(quote['03. high']),
+        low: parseFloat(quote['04. low']),
+        volume: parseInt(quote['06. volume'])
+      };
+      
+      // Update current price display
+      document.getElementById('price').textContent = formatCurrency(currentData.price, currency);
+      updateElement('change', currentData.change, false, true, currency);
+      updateElement('change-percent', currentData.changePercent / 100, true);
+      updateElement('open', currentData.open, false, true, currency);
+      updateElement('high', currentData.high, false, true, currency);
+      updateElement('low', currentData.low, false, true, currency);
+      updateElement('volume', currentData.volume?.toLocaleString());
+  
+      // Get fundamental data
+      console.log('Fetching fundamental data...');
+      const overview = await getCompanyOverview(symbol);
+      console.log('Overview data:', overview);
+      
+      // Update dividend information
+      updateElement('dividend-yield', overview.DividendYield || 'N/A');
+      updateElement('dividend-amount', overview.DividendPerShare, false, true, currency);
+      updateElement('ex-dividend-date', overview.ExDividendDate || 'N/A');
+      
+      // Get historical data for CAGR calculations
+      const historicalPrices = await getHistoricalPrices(symbol);
+      console.log('Historical prices sample:', Object.keys(historicalPrices).slice(0, 5));
+      
+      // Calculate price CAGR manually
+      const priceData = Object.keys(historicalPrices).sort().reverse();
+      const currentPrice = parseFloat(historicalPrices[priceData[0]]['5. adjusted close']);
+      
+      [1, 3, 5, 10, 15].forEach(years => {
+        const targetIndex = Math.min(years * 252, priceData.length - 1); // ~252 trading days per year
+        if (targetIndex < priceData.length) {
+          const historicalPrice = parseFloat(historicalPrices[priceData[targetIndex]]['5. adjusted close']);
+          const cagr = calculateCAGR(historicalPrice, currentPrice, years);
+          updateElement(`price-cagr-${years}y`, cagr, true);
+          console.log(`${years}Y CAGR:`, cagr);
         }
-
-        // Update current price display
-        document.getElementById('price').textContent = formatCurrency(currentData.price, currency);
-        updateElement('change', currentData.change, false, true, currency);
-        updateElement('change-percent', currentData.changePercent / 100, true);
-        updateElement('open', currentData.open, false, true, currency);
-        updateElement('high', currentData.high, false, true, currency);
-        updateElement('low', currentData.low, false, true, currency);
-        updateElement('volume', currentData.volume?.toLocaleString());
-
-        // For US stocks, get detailed fundamental data
-        if (!symbol.includes('.NS') && !symbol.includes('.BO')) {
-          try {
-            overview = await getCompanyOverview(symbol);
-            incomeStatement = await getIncomeStatement(symbol);
-            cashFlow = await getCashFlow(symbol);
-            historicalPrices = await getHistoricalPrices(symbol);
-
-            // Update dividend information
-            updateElement('dividend-yield', overview.DividendYield || 'N/A');
-            updateElement('dividend-amount', overview.DividendPerShare, false, true, currency);
-            updateElement('ex-dividend-date', overview.ExDividendDate || 'N/A');
-
-            // Calculate and update price CAGR
-            [1, 3, 5, 10, 15].forEach(years => {
-              const cagr = calculatePriceCAGR(historicalPrices, years);
-              updateElement(`price-cagr-${years}y`, cagr, true);
-            });
-
-            // Update EPS data
-            const epsData = extractAnnualData(incomeStatement, 'reportedEPS');
-            updateElement('current-eps', epsData[0]?.value, false, true, currency);
-            [1, 3, 5].forEach(years => {
-              const growth = calculateGrowthCAGR(epsData, years);
-              updateElement(`eps-${years === 1 ? 'growth-1y' : `cagr-${years}y`}`, growth, true);
-            });
-
-            // Update FCF data
-            const fcfData = extractAnnualData(cashFlow, 'operatingCashflow');
-            updateElement('current-fcf', fcfData[0]?.value, false, true, currency);
-            [1, 3, 5, 10].forEach(years => {
-              const growth = calculateGrowthCAGR(fcfData, years);
-              updateElement(`fcf-${years === 1 ? 'growth-1y' : `cagr-${years}y`}`, growth, true);
-            });
-
-            // Update Revenue data
-            const revenueData = extractAnnualData(incomeStatement, 'totalRevenue');
-            updateElement('current-revenue', revenueData[0]?.value, false, true, currency);
-            [1, 3, 5, 10, 15].forEach(years => {
-              const growth = calculateGrowthCAGR(revenueData, years);
-              updateElement(`revenue-${years === 1 ? 'growth-1y' : `cagr-${years}y`}`, growth, true);
-            });
-
-          } catch (fundamentalError) {
-            console.log('Could not fetch fundamental data:', fundamentalError.message);
-            document.getElementById('source').textContent += ' (Fundamental data unavailable)';
-          }
-        } else {
-          // For Indian stocks, show message about limited data
-          document.getElementById('source').textContent += ' (Fundamental data limited for Indian stocks)';
-        }
-
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('content').style.display = 'block';
-        
-      } catch (error) {
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('error').style.display = 'block';
-        document.getElementById('error').textContent = `Error loading data: ${error.message}`;
+      });
+  
+      // Get EPS data
+      const incomeStatement = await getIncomeStatement(symbol);
+      console.log('Income statement sample:', incomeStatement);
+      
+      const epsData = extractAnnualData(incomeStatement, 'reportedEPS');
+      console.log('EPS data:', epsData);
+      
+      if (epsData.length > 0) {
+        updateElement('current-eps', epsData[0]?.value, false, true, currency);
+        [1, 3, 5].forEach(years => {
+          const growth = calculateGrowthCAGR(epsData, years);
+          updateElement(`eps-${years === 1 ? 'growth-1y' : `cagr-${years}y`}`, growth, true);
+        });
       }
-    }
-
-    async function main() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const symbol = urlParams.get('symbol') || 'AAPL';
+  
+      // Get cash flow data
+      const cashFlow = await getCashFlow(symbol);
+      const fcfData = extractAnnualData(cashFlow, 'operatingCashflow');
       
-      document.getElementById('stock-symbol').textContent = symbol;
-      document.title = `${symbol} - Stock Analysis Dashboard`;
+      if (fcfData.length > 0) {
+        updateElement('current-fcf', fcfData[0]?.value, false, true, currency);
+        [1, 3, 5, 10].forEach(years => {
+          const growth = calculateGrowthCAGR(fcfData, years);
+          updateElement(`fcf-${years === 1 ? 'growth-1y' : `cagr-${years}y`}`, growth, true);
+        });
+      }
+  
+      // Get revenue data
+      const revenueData = extractAnnualData(incomeStatement, 'totalRevenue');
       
-      await loadStockData(symbol);
+      if (revenueData.length > 0) {
+        updateElement('current-revenue', revenueData[0]?.value, false, true, currency);
+        [1, 3, 5, 10, 15].forEach(years => {
+          const growth = calculateGrowthCAGR(revenueData, years);
+          updateElement(`revenue-${years === 1 ? 'growth-1y' : `cagr-${years}y`}`, growth, true);
+        });
+      }
+  
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('content').style.display = 'block';
+      document.getElementById('source').textContent = 'Data source: Alpha Vantage';
+      
+      console.log('Data loading completed successfully');
+      
+    } catch (error) {
+      console.error('Error loading stock data:', error);
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error').style.display = 'block';
+      document.getElementById('error').textContent = `Error loading data: ${error.message}`;
     }
-
-    window.onload = main;
+  }
+  
+  async function main() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const symbol = urlParams.get('symbol') || 'AAPL';
+    
+    document.getElementById('stock-symbol').textContent = symbol;
+    document.title = `${symbol} - Stock Analysis Dashboard`;
+    
+    await loadStockData(symbol);
+  }
+  
+  window.onload = main;
   </script>
 </body>
 </html>
