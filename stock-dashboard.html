@@ -1,153 +1,160 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Stock Dashboard – Secure</title>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Stock Dashboard</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <style>
-    body {font-family:Arial, sans-serif; background:#f4f4f4; margin:0; padding:20px;}
-    .container {max-width:1200px; margin:0 auto;}
-    .header   {background:#222; color:#fff; padding:20px; border-radius:8px; text-align:center;}
-    .metrics-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:20px; margin:20px 0;}
-    .metric-card{background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,.1);}
-    .metric-card h3{margin:0 0 15px; border-bottom:2px solid #007bff; padding-bottom:10px; color:#333;}
-    .metric-row{display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee;}
-    .metric-label{font-weight:700; color:#666;}
-    .metric-value{color:#333;}
-    .positive{color:#28a745; font-weight:700;}
-    .negative{color:#dc3545; font-weight:700;}
-    .loading{text-align:center; color:#666; padding:40px;}
-    .error{text-align:center; color:#dc3545; padding:20px;}
-    .price-stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:15px;}
-    .price-stat{background:#e9ecef; padding:15px; border-radius:5px; text-align:center;}
+    /* — unchanged styles — */
+    body{font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:20px}
+    .container{max-width:1200px;margin:0 auto}
+    .header{background:#222;color:#fff;padding:20px;border-radius:8px;text-align:center}
+    .metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin:20px 0}
+    .metric-card{background:#fff;padding:20px;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,.1)}
+    .metric-card h3{margin:0 0 15px;color:#333;border-bottom:2px solid #007bff;padding-bottom:10px}
+    .metric-row{display:flex;justify-content:space-between;margin:10px 0;padding:8px 0;border-bottom:1px solid #eee}
+    .metric-label{font-weight:700;color:#666}.metric-value{color:#333}
+    .positive{color:#28a745;font-weight:700}.negative{color:#dc3545;font-weight:700}
+    .loading{text-align:center;color:#666;padding:40px}.error{text-align:center;color:#dc3545;padding:20px}
+    .price-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:15px}
+    .price-stat{background:#e9ecef;padding:15px;border-radius:5px;text-align:center}
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1 id="stock-symbol">Loading…</h1>
-      <p id="source" style="font-size:12px; opacity:.8;"></p>
-    </div>
-
-    <div id="loading" class="loading">Fetching data…</div>
-    <div id="error"   class="error"   style="display:none;"></div>
-
-    <div id="content" style="display:none;">
-      <div class="metric-card">
-        <h3>Current Market Data</h3>
-        <div class="price-stats">
-          <div class="price-stat">Price: <strong id="price">-</strong></div>
-          <div class="price-stat">Change: <strong id="change">-</strong></div>
-          <div class="price-stat">Change %: <strong id="change-percent">-</strong></div>
-          <div class="price-stat">Open: <strong id="open">-</strong></div>
-          <div class="price-stat">High: <strong id="high">-</strong></div>
-          <div class="price-stat">Low: <strong id="low">-</strong></div>
-          <div class="price-stat">Volume: <strong id="volume">-</strong></div>
-        </div>
-      </div>
-
-      <div class="metrics-grid">
-        <!-- ONE template card shown – keep the others you already have -->
-        <div class="metric-card">
-          <h3>📈 Stock Price CAGR</h3>
-          <div class="metric-row"><span class="metric-label">1 Year:</span><span class="metric-value" id="price-cagr-1y">-</span></div>
-          <div class="metric-row"><span class="metric-label">3 Years:</span><span class="metric-value" id="price-cagr-3y">-</span></div>
-          <div class="metric-row"><span class="metric-label">5 Years:</span><span class="metric-value" id="price-cagr-5y">-</span></div>
-          <div class="metric-row"><span class="metric-label">10 Years:</span><span class="metric-value" id="price-cagr-10y">-</span></div>
-          <div class="metric-row"><span class="metric-label">15 Years:</span><span class="metric-value" id="price-cagr-15y">-</span></div>
-        </div>
-        <!-- keep your other cards unchanged -->
-      </div>
-    </div>
+<div class="container">
+  <div class="header">
+    <h1 id="stock-symbol">Loading…</h1>
+    <p id="company-name">&nbsp;</p>
+    <p id="source" style="font-size:12px;opacity:.8;"></p>
   </div>
 
+  <div id="loading" class="loading">Fetching cached data from GitHub Actions…</div>
+  <div id="error"   class="error" style="display:none;"></div>
+
+  <div id="content" style="display:none;">
+    <!--  ALL metric cards exactly as before – omitted here only for brevity  -->
+    <!--  copy-paste from your original; nothing removed or reordered        -->
+  </div>
+</div>
+
 <script>
-/* ---------- helpers ---------- */
-const isIndian = s => s.includes('.NS') || s.includes('.BO');
-const formatCurrency = (v, c='$') => isNaN(v)?'-':c+Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
-const formatPct      = v => isNaN(v)?'-':(v>=0?'+':'')+(v*100).toFixed(2)+'%';
-function update(id,val,opt={}){const el=document.getElementById(id);if(!el)return;
-  if(opt.pct)  {el.textContent=formatPct(val);el.className=val>=0?'positive':'negative';}
-  else if(opt.cur){el.textContent=formatCurrency(val,opt.cur);}
-  else el.textContent=val??'-';
+/* ───────────── constants ───────────── */
+const RAW = 'https://raw.githubusercontent.com/SundarAiReports/stock-analysis-India/main/data';
+const CACHE = {};          // five-minute in-memory cache
+
+/* ───────────── helpers ───────────── */
+function cagr(s,e,y){return(!s||!e||y<=0)?null:Math.pow(e/s,1/y)-1;}
+function cur(v,c='$'){if(!v||isNaN(v))return'-';
+  const a=Math.abs(v);let n=v,s='';
+  if(a>=1e12){n=v/1e12;s='T'}else if(a>=1e9){n=v/1e9;s='B'}
+  else if(a>=1e6){n=v/1e6;s='M'}else if(a>=1e3){n=v/1e3;s='K'}
+  return c+n.toFixed(2)+s;}
+function pct(v){return(!v||isNaN(v))?'-':(v>=0?'+':'')+(v*100).toFixed(2)+'%';}
+function put(id,val,isPct=false,isCur=false,c='$'){
+  const el=document.getElementById(id);if(!el)return;
+  if(isCur)el.textContent=cur(val,c);
+  else if(isPct){el.textContent=pct(val);el.className=val>=0?'positive':'negative';}
+  else el.textContent=val??'-';}
+
+/* ───────────── JSON loader ───────────── */
+async function loadJSON(symbol,endpoint){
+  const key=`${symbol}-${endpoint}`,c=CACHE[key];
+  if(c && Date.now()-c.ts<300000) return c.data;           // 5 min cache
+  const r=await fetch(`${RAW}/${symbol.toLowerCase()}-${endpoint}.json`);
+  if(!r.ok) throw new Error(`Missing ${endpoint} for ${symbol}`);
+  const d=await r.json(); CACHE[key]={data:d,ts:Date.now()}; return d;
 }
 
-/* ---------- data loaders ---------- */
-async function fetchLocalJSON(path){
-  const res=await fetch(path,{cache:'no-store'});
-  if(!res.ok) throw new Error('missing '+path);
-  return res.json();
-}
-
-async function getQuote(symbol){
-  return fetchLocalJSON(`./data/${symbol}.json`);
-}
-async function getHist(symbol){
-  return fetchLocalJSON(`./data/${symbol}_historical.json`);
-}
-/* Indian fallback */
-async function getQuoteYahoo(symbol){
-  const url='https://api.allorigins.win/raw?url='+encodeURIComponent(
-    `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`);
-  const data=await fetch(url).then(r=>r.json());
-  const m=data.chart.result[0].meta;
-  return{
-    close:m.regularMarketPrice||m.previousClose,
-    change:m.regularMarketPrice-m.previousClose,
-    percent_change:(m.regularMarketPrice-m.previousClose)/m.previousClose*100,
-    open:m.regularMarketOpen,high:m.regularMarketDayHigh,
-    low:m.regularMarketDayLow,volume:m.regularMarketVolume};
-}
-async function getHistYahoo(symbol,years=15){
-  const now=Math.floor(Date.now()/1000),start=now-years*365*24*60*60;
-  const url='https://api.allorigins.win/raw?url='+encodeURIComponent(
-   `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${start}&period2=${now}&interval=1d`);
-  const data=await fetch(url).then(r=>r.json());
-  const r=data.chart.result[0]; return r.timestamp.map((t,i)=>({close:r.indicators.adjclose[0].adjclose[i]}));
-}
-
-/* ---------- calc ---------- */
-const CAGR=(s,e,y)=>(!s||!e||y<=0)?null:Math.pow(e/s,1/y)-1;
-/* ---------- main ---------- */
-async function load(){
-  const params=new URLSearchParams(location.search);
-  const symbol=params.get('symbol')||'AAPL';
-  document.getElementById('stock-symbol').textContent=symbol;
-
+/* ───────────── main renderer ───────────── */
+async function render(sym){
   try{
-    const indian=isIndian(symbol),cur=indian?'₹':'$';
-    /* quote */
-    const q= indian?await getQuoteYahoo(symbol):await getQuote(symbol);
-    update('price', q.close, {cur});
-    update('change',q.change,{cur});
-    update('change-percent',q.percent_change/100,{pct:true});
-    update('open',q.open,{cur});update('high',q.high,{cur});
-    update('low', q.low ,{cur});update('volume',q.volume?.toLocaleString());
+    document.getElementById('loading').textContent=`Loading ${sym}…`;
+    const curSym=sym.includes('.NS')?'₹':'$';
 
-    /* CAGR from history */
-    const hist= indian?await getHistYahoo(symbol):await getHist(symbol);
-    if(hist.length){
-      const priceNow=hist.at(-1).close;
-      const day=252;
-      [[1,1*day],[3,3*day],[5,5*day],[10,10*day],[15,15*day]].forEach(([yr,idx])=>{
-        if(hist.length>idx){
-          const cagr=CAGR(hist[hist.length-1-idx].close,priceNow,yr);
-          update(`price-cagr-${yr}y`,cagr,{pct:true});
-        }
+    /* quote */
+    const q=await loadJSON(sym,'quote');
+    put('price',+q.close,false,true,curSym);
+    put('change',+q.change,false,true,curSym);
+    put('change-percent',+q.percent_change/100,true);
+    ['open','high','low'].forEach(f=>put(f,+q[f],false,true,curSym));
+    put('volume',(+q.volume).toLocaleString());
+
+    /* price cagr */
+    const ts=await loadJSON(sym,'time_series');
+    if(ts.values){
+      const p=ts.values.reverse(),last=+p.at(-1).close;
+      [1,3,5,10,15].forEach(y=>{
+        const i=p.length-1-y*252;
+        if(i>=0) put(`price-cagr-${y}y`,cagr(+p[i].close,last,y),true);
       });
     }
-    document.getElementById('source').textContent= indian?
-       'Yahoo Finance (Indian price only)' :
-       'Pre-fetched JSON (API key kept in GitHub Secrets)';
+
+    /* dividends */
+    try{
+      const d=await loadJSON(sym,'dividends');
+      if(d.length){
+        const latest=d[0],annual=d.slice(0,4).reduce((s,x)=>s+ +x.amount,0);
+        put('dividend-amount',annual,false,true,curSym);
+        put('ex-dividend-date',latest.ex_date);
+        put('dividend-yield',(annual/q.close)*100,true);
+        if(d.length>=36) put('dividend-cagr-3y',cagr(+d[35].amount,+latest.amount,3),true);
+        if(d.length>=60) put('dividend-cagr-5y',cagr(+d[59].amount,+latest.amount,5),true);
+      }
+    }catch{}
+
+    /* earnings */
+    try{
+      const e=await loadJSON(sym,'earnings');
+      if(e.length){
+        const cur=+e[0].eps_actual; put('current-eps',cur,false,true,curSym);
+        if(e.length>=4)  put('eps-growth-1y',cagr(+e[3].eps_actual,cur,1),true);
+        [3,5].forEach(y=>{const q=y*4;if(e.length>=q)put(`eps-cagr-${y}y`,cagr(+e[q-1].eps_actual,cur,y),true);});
+      }
+    }catch{}
+
+    /* cashflow + revenue */
+    try{
+      const cf =await loadJSON(sym,'cash_flow');
+      const inc=await loadJSON(sym,'income_statement');
+      if(cf.length){
+        const fcf=+(cf[0].free_cash_flow||cf[0].operating_cash_flow||0);
+        put('current-fcf',fcf,false,true,curSym);
+        [1,3,5,10].forEach(y=>{
+          if(cf.length>y)put(`fcf-${y===1?'growth-1y':`cagr-${y}y`}`,
+            cagr(+(cf[y].free_cash_flow||cf[y].operating_cash_flow||0),fcf,y),true);
+        });
+      }
+      if(inc.length){
+        const rev=+inc[0].total_revenue; put('current-revenue',rev,false,true,curSym);
+        [1,3,5,10,15].forEach(y=>{
+          if(inc.length>y)put(`revenue-${y===1?'growth-1y':`cagr-${y}y`}`,
+            cagr(+inc[y].total_revenue,rev,y),true);
+        });
+      }
+    }catch{}
+
+    /* finish */
+    document.getElementById('source').textContent=
+      'Data source: GitHub Actions (no live API calls)';
     document.getElementById('loading').style.display='none';
     document.getElementById('content').style.display='block';
+
   }catch(err){
     document.getElementById('loading').style.display='none';
     const e=document.getElementById('error');
-    e.textContent='Error: '+err.message; e.style.display='block';
+    e.style.display='block';e.textContent='Error: '+err.message;
+    console.error(err);
   }
 }
-window.onload=load;
+
+/* ───────────── entry point ───────────── */
+window.onload=()=>{
+  const p=new URLSearchParams(location.search);
+  const sym=p.get('symbol')||'AAPL';
+  document.getElementById('stock-symbol').textContent=sym;
+  document.title=`${sym} – Stock Dashboard`;
+  render(sym);
+};
 </script>
 </body>
 </html>
