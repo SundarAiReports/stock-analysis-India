@@ -1,36 +1,54 @@
-name: Update data JSON
+name: Update Stock Dashboard Data
 
 on:
   schedule:
-    - cron:  '*/30 * * * *'      # every 30 min (lowest GitHub guarantees ≈15 min)
-  workflow_dispatch:             # manual run button
+    - cron: '*/30 * * * *'  # Every 30 minutes
+  workflow_dispatch:        # Manual trigger
 
 jobs:
-  update:
+  update-data:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false   # we will push with PAT
+          persist-credentials: false
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - run: npm install node-fetch@^3
-      - run: node scripts/fetch.js
+      - name: Install dependencies
+        run: npm install node-fetch@^3
+
+      - name: Fetch stock data
+        run: node scripts/fetch.js
         env:
           TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
 
-      - name: Commit & push
-- name: Commit & push
-  run: |
-    git config user.name  "github-actions[bot]"
-    git config user.email "github-actions[bot]@users.noreply.github.com"
-    git add data/*.json
-    git commit -m "chore: automated data update [skip ci]" || echo "No changes"
-    git push
+      - name: Generate dashboard index
+        run: node scripts/generate-dashboard.js
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "🔄 Auto-update: Stock data $(date +'%Y-%m-%d %H:%M UTC')" || echo "No changes"
+          git push
         env:
-          # Default GITHUB_TOKEN has push rights to the same repo
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-pages:
+    needs: update-data
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v3
