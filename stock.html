@@ -16,9 +16,12 @@
     .price-stat{background:#e9ecef;padding:15px;border-radius:5px;text-align:center}
     .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin:20px 0}
     .row{display:flex;justify-content:space-between;margin:10px 0;padding:8px 0;border-bottom:1px solid #eee}
-    .label{font-weight:700;color:var(--muted)}.val{color:var(--txt)}
-    .positive{color:#28a745;font-weight:700}.negative{color:#dc3545;font-weight:700}
-    .loading{text-align:center;color:var(--muted);padding:40px}.error{text-align:center;color:#dc3545;padding:20px}
+    .label{font-weight:700;color:var(--muted)}
+    .val{color:var(--txt)}
+    .positive{color:#28a745;font-weight:700}
+    .negative{color:#dc3545;font-weight:700}
+    .loading{text-align:center;color:var(--muted);padding:40px}
+    .error{text-align:center;color:#dc3545;padding:20px}
   </style>
 </head>
 <body>
@@ -27,14 +30,14 @@
 
   <div class="header">
     <h1 id="sym">Loading…</h1>
-    <p id="source" style="font-size:12px;opacity:.8;">Data source: GitHub Actions (static JSON)</p>
+    <p id="source" style="font-size:12px;opacity:.8;">Data source: TwelveData → Netlify (Live, 30 min cache)</p>
   </div>
 
-  <div id="loading" class="loading">Fetching cached data…</div>
+  <div id="loading" class="loading">Fetching live data…</div>
   <div id="error"   class="error" style="display:none;"></div>
 
   <div id="content" style="display:none;">
-    <!-- Market data -->
+    <!-- ────────── Market card ────────── -->
     <div class="metric-card">
       <h3>Current Market Data</h3>
       <div class="price-stats">
@@ -48,15 +51,15 @@
       </div>
     </div>
 
-    <!-- All other metrics -->
+    <!-- ────────── Metric grid ────────── -->
     <div class="grid">
       <!-- Dividend -->
       <div class="metric-card"><h3>💰 Dividend</h3>
         <div class="row"><span class="label">Yield</span><span class="val" id="divY">-</span></div>
         <div class="row"><span class="label">Annual</span><span class="val" id="divAmt">-</span></div>
         <div class="row"><span class="label">Ex-Date</span><span class="val" id="exDiv">-</span></div>
-        <div class="row"><span class="label">CAGR 3Y</span><span class="val" id="divC3">-</span></div>
-        <div class="row"><span class="label">CAGR 5Y</span><span class="val" id="divC5">-</span></div>
+        <div class="row"><span class="label">CAGR 3 Y</span><span class="val" id="divC3">-</span></div>
+        <div class="row"><span class="label">CAGR 5 Y</span><span class="val" id="divC5">-</span></div>
       </div>
 
       <!-- Price CAGR -->
@@ -99,58 +102,128 @@
 </div>
 
 <script>
-/* constants */
-const RAW='https://raw.githubusercontent.com/SundarAiReports/stock-analysis-India/main/data';
-const CACHE={};
-/* helpers */
+/* ───────── helper functions ───────── */
 const cagr=(s,e,y)=>(!s||!e||y<=0)?null:Math.pow(e/s,1/y)-1;
-function cur(v,c='$'){if(!v||isNaN(v))return'-';const a=Math.abs(v);let n=v,s='';if(a>=1e12){n=v/1e12;s='T'}
-else if(a>=1e9){n=v/1e9;s='B'}else if(a>=1e6){n=v/1e6;s='M'}else if(a>=1e3){n=v/1e3;s='K'}return c+n.toFixed(2)+s;}
+const cur=(v,c='$')=>{
+  if(!v||isNaN(v)) return '-';
+  const a=Math.abs(v); let n=v,u='';
+  if(a>=1e12){n=v/1e12;u='T'}
+  else if(a>=1e9){n=v/1e9;u='B'}
+  else if(a>=1e6){n=v/1e6;u='M'}
+  else if(a>=1e3){n=v/1e3;u='K'}
+  return c+n.toFixed(2)+u;
+};
 const pct=v=>(!v||isNaN(v))?'-':(v>=0?'+':'')+(v*100).toFixed(2)+'%';
-function put(id,v,p=false,curr=false,curS='$'){const e=document.getElementById(id);if(!e)return;
- if(curr)e.textContent=cur(v,curS);else if(p){e.textContent=pct(v);e.className=v>=0?'positive':'negative';}
- else e.textContent=v??'-';}
-async function load(sym,ep){const k=`${sym}-${ep}`,c=CACHE[k];if(c&&Date.now()-c.t<3e5)return c.d;
- const r=await fetch(`${RAW}/${sym.toLowerCase()}-${ep}.json`);if(!r.ok)throw Error(`${ep} missing`);const d=await r.json();CACHE[k]={d,t:Date.now()};return d;}
-/* main render */
-async function render(sym){
- try{
-  document.getElementById('loading').textContent=`Loading ${sym}…`;
-  const curS=sym.includes('.NS')||sym.includes('.BO')?'₹':'$';
-  const q=await load(sym,'quote');
-  put('price',+q.close,false,true,curS);put('change',+q.change,false,true,curS);put('chgPct',+q.percent_change/100,true);
-  ['open','high','low'].forEach(f=>put(f,+q[f],false,true,curS));put('vol',(+q.volume).toLocaleString());
-
-  const t=await load(sym,'time_series');if(t.values){const p=t.values.reverse(),last=+p.at(-1).close;
-   [1,3,5,10,15].forEach(y=>{const idx=p.length-1-y*252;if(idx>=0)put(`p${y}y`,cagr(+p[idx].close,last,y),true);});}
-
-  try{const d=await load(sym,'dividends');if(d.length){
-   const latest=d[0],ann=d.slice(0,4).reduce((s,x)=>s+ +x.amount,0);
-   put('divAmt',ann,false,true,curS);put('divY',(ann/q.close)*100,true);put('exDiv',latest.ex_date);
-   if(d.length>=36)put('divC3',cagr(+d[35].amount,+latest.amount,3),true);
-   if(d.length>=60)put('divC5',cagr(+d[59].amount,+latest.amount,5),true);}}catch{}
-
-  try{const e=await load(sym,'earnings');if(e.length){
-   const cur=+e[0].eps_actual;put('epsNow',cur,false,true,curS);
-   if(e.length>=4)put('epsG1',cagr(+e[3].eps_actual,cur,1),true);
-   [3,5].forEach(y=>{const q=y*4;if(e.length>=q)put(`epsC${y}`,cagr(+e[q-1].eps_actual,cur,y),true);});}}catch{}
-
-  try{
-   const cf=await load(sym,'cash_flow');if(cf.length){
-    const fcf=+(cf[0].free_cash_flow||cf[0].operating_cash_flow||0);put('fcfNow',fcf,false,true,curS);
-    [1,3,5,10].forEach(y=>{if(cf.length>y)put(`fcf${y===1?'G1':`C${y}`}`,cagr(+(cf[y].free_cash_flow||cf[y].operating_cash_flow||0),fcf,y),true);});}
-   const inc=await load(sym,'income_statement');if(inc.length){
-    const rev=+inc[0].total_revenue;put('revNow',rev,false,true,curS);
-    [1,3,5,10,15].forEach(y=>{if(inc.length>y)put(`rev${y===1?'G1':`C${y}`}`,cagr(+inc[y].total_revenue,rev,y),true);});}}catch{}
-
-  document.getElementById('loading').style.display='none';
-  document.getElementById('content').style.display='block';
- }catch(e){document.getElementById('loading').style.display='none';const er=document.getElementById('error');
-  er.style.display='block';er.textContent='Error: '+e.message;console.error(e);}
+function put(id,v,isPct=false,isCur=false,curSym='$'){
+  const el=document.getElementById(id); if(!el) return;
+  if(isCur)       el.textContent=cur(v,curSym);
+  else if(isPct) {el.textContent=pct(v); el.className=v>=0?'positive':'negative';}
+  else            el.textContent=v??'-';
 }
+
+/* ───────── Netlify on-demand loader (30 min cache) ───────── */
+async function loadJSON(symbol, endpoint){
+  const url=`/.netlify/functions/stock?symbol=${symbol}&endpoint=${endpoint}`;
+  const r=await fetch(url);
+  if(!r.ok) throw new Error(`${endpoint} fetch failed`);
+  return await r.json();
+}
+
+/* ───────── main render ───────── */
+async function render(sym){
+  try{
+    document.getElementById('loading').textContent=`Loading ${sym}…`;
+    const curSym = sym.match(/\\.NS|\\.BO$/) ? '₹' : '$';
+
+    /* quote */
+    const q = await loadJSON(sym,'quote');
+    put('price', +q.close,false,true,curSym);
+    put('change',+q.change,false,true,curSym);
+    put('chgPct',+q.percent_change/100,true);
+    ['open','high','low'].forEach(f=>put(f,+q[f],false,true,curSym));
+    put('vol',(+q.volume).toLocaleString());
+
+    /* price series */
+    const ts = await loadJSON(sym,'time_series');
+    if(ts.values){
+      const p=ts.values.reverse();
+      const now=+p.at(-1).close;
+      [1,3,5,10,15].forEach(y=>{
+        const i=p.length-1-y*252;
+        if(i>=0) put(`p${y}y`,cagr(+p[i].close,now,y),true);
+      });
+    }
+
+    /* dividends */
+    try{
+      const d=await loadJSON(sym,'dividends');
+      if(d.length){
+        const latest=d[0];
+        const annual=d.slice(0,4).reduce((s,x)=>s+ +x.amount,0);
+        put('divAmt',annual,false,true,curSym);
+        put('divY',(annual/q.close)*100,true);
+        put('exDiv',latest.ex_date);
+        if(d.length>=36) put('divC3',cagr(+d[35].amount,+latest.amount,3),true);
+        if(d.length>=60) put('divC5',cagr(+d[59].amount,+latest.amount,5),true);
+      }
+    }catch{}
+
+    /* earnings */
+    try{
+      const e=await loadJSON(sym,'earnings');
+      if(e.length){
+        const cur=+e[0].eps_actual;
+        put('epsNow',cur,false,true,curSym);
+        if(e.length>=4) put('epsG1',cagr(+e[3].eps_actual,cur,1),true);
+        [3,5].forEach(y=>{
+          const q=y*4;
+          if(e.length>=q) put(`epsC${y}`,cagr(+e[q-1].eps_actual,cur,y),true);
+        });
+      }
+    }catch{}
+
+    /* cash-flow & income */
+    try{
+      const cf =await loadJSON(sym,'cash_flow');
+      const inc=await loadJSON(sym,'income_statement');
+
+      if(cf.length){
+        const fcf=+(cf[0].free_cash_flow||cf[0].operating_cash_flow||0);
+        put('fcfNow',fcf,false,true,curSym);
+        [1,3,5,10].forEach(y=>{
+          if(cf.length>y)
+            put(`fcf${y===1?'G1':`C${y}`}`,cagr(+(cf[y].free_cash_flow||cf[y].operating_cash_flow||0),fcf,y),true);
+        });
+      }
+
+      if(inc.length){
+        const rev=+inc[0].total_revenue;
+        put('revNow',rev,false,true,curSym);
+        [1,3,5,10,15].forEach(y=>{
+          if(inc.length>y)
+            put(`rev${y===1?'G1':`C${y}`}`,cagr(+inc[y].total_revenue,rev,y),true);
+        });
+      }
+    }catch{}
+
+    document.getElementById('loading').style.display='none';
+    document.getElementById('content').style.display='block';
+  }catch(err){
+    document.getElementById('loading').style.display='none';
+    const er=document.getElementById('error');
+    er.style.display='block';
+    er.textContent='Error: '+err.message;
+    console.error(err);
+  }
+}
+
+/* ───────── entry ───────── */
 window.onload=()=>{
- const p=new URLSearchParams(location.search),sym=p.get('symbol')||'AAPL';
- document.getElementById('sym').textContent=sym;document.title=`${sym} – Dashboard`;render(sym);
+  const params=new URLSearchParams(location.search);
+  const sym   =params.get('symbol')||'AAPL';
+  document.getElementById('sym').textContent=sym;
+  document.title=`${sym} – Dashboard`;
+  render(sym);
 };
 </script>
 </body>
