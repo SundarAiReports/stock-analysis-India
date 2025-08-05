@@ -24,12 +24,13 @@ jobs:
           TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
 
       - name: Commit & push
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/*.json
-          git commit -m "chore: automated data update" || echo "No changes"
-          git push
+- name: Commit & push
+  run: |
+    git config user.name  "github-actions[bot]"
+    git config user.email "github-actions[bot]@users.noreply.github.com"
+    git add data/*.json
+    git commit -m "chore: automated data update [skip ci]" || echo "No changes"
+    git push
         env:
           # Default GITHUB_TOKEN has push rights to the same repo
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
