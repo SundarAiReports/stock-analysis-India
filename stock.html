@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Stock Analysis Dashboard</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <style>
+    :root{--card:#fff;--accent:#007bff;--txt:#333;--muted:#666}
+    body{font-family:Arial,Helvetica,sans-serif;background:#f4f4f4;margin:0;padding:20px;color:var(--txt)}
+    .container{max-width:1200px;margin:0 auto}
+    .header{background:#222;color:#fff;padding:20px;border-radius:8px;text-align:center}
+    .back{display:inline-block;margin:10px 0 20px;padding:8px 16px;background:var(--accent);color:#fff;text-decoration:none;border-radius:4px}
+    .metric-card{background:var(--card);padding:20px;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,.1);margin-bottom:20px}
+    .metric-card h3{margin:0 0 15px;border-bottom:2px solid var(--accent);padding-bottom:10px}
+    .price-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:15px}
+    .price-stat{background:#e9ecef;padding:15px;border-radius:5px;text-align:center}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin:20px 0}
+    .row{display:flex;justify-content:space-between;margin:10px 0;padding:8px 0;border-bottom:1px solid #eee}
+    .label{font-weight:700;color:var(--muted)}.val{color:var(--txt)}
+    .positive{color:#28a745;font-weight:700}.negative{color:#dc3545;font-weight:700}
+    .loading{text-align:center;color:var(--muted);padding:40px}.error{text-align:center;color:#dc3545;padding:20px}
+  </style>
+</head>
+<body>
+<div class="container">
+  <a href="index.html" class="back">← Back to Email Report</a>
+
+  <div class="header">
+    <h1 id="sym">Loading…</h1>
+    <p id="source" style="font-size:12px;opacity:.8;">Data source: GitHub Actions (static JSON)</p>
+  </div>
+
+  <div id="loading" class="loading">Fetching cached data…</div>
+  <div id="error"   class="error" style="display:none;"></div>
+
+  <div id="content" style="display:none;">
+    <!-- Market data -->
+    <div class="metric-card">
+      <h3>Current Market Data</h3>
+      <div class="price-stats">
+        <div class="price-stat">Price <strong id="price">-</strong></div>
+        <div class="price-stat">Change <strong id="change">-</strong></div>
+        <div class="price-stat">Change % <strong id="chgPct">-</strong></div>
+        <div class="price-stat">Open <strong id="open">-</strong></div>
+        <div class="price-stat">High <strong id="high">-</strong></div>
+        <div class="price-stat">Low <strong id="low">-</strong></div>
+        <div class="price-stat">Volume <strong id="vol">-</strong></div>
+      </div>
+    </div>
+
+    <!-- All other metrics -->
+    <div class="grid">
+      <!-- Dividend -->
+      <div class="metric-card"><h3>💰 Dividend</h3>
+        <div class="row"><span class="label">Yield</span><span class="val" id="divY">-</span></div>
+        <div class="row"><span class="label">Annual</span><span class="val" id="divAmt">-</span></div>
+        <div class="row"><span class="label">Ex-Date</span><span class="val" id="exDiv">-</span></div>
+        <div class="row"><span class="label">CAGR 3Y</span><span class="val" id="divC3">-</span></div>
+        <div class="row"><span class="label">CAGR 5Y</span><span class="val" id="divC5">-</span></div>
+      </div>
+
+      <!-- Price CAGR -->
+      <div class="metric-card"><h3>📈 Price CAGR</h3>
+        <div class="row"><span class="label">1 Y</span><span class="val" id="p1y">-</span></div>
+        <div class="row"><span class="label">3 Y</span><span class="val" id="p3y">-</span></div>
+        <div class="row"><span class="label">5 Y</span><span class="val" id="p5y">-</span></div>
+        <div class="row"><span class="label">10 Y</span><span class="val" id="p10y">-</span></div>
+        <div class="row"><span class="label">15 Y</span><span class="val" id="p15y">-</span></div>
+      </div>
+
+      <!-- EPS -->
+      <div class="metric-card"><h3>💡 EPS Growth</h3>
+        <div class="row"><span class="label">Current</span><span class="val" id="epsNow">-</span></div>
+        <div class="row"><span class="label">Growth 1 Y</span><span class="val" id="epsG1">-</span></div>
+        <div class="row"><span class="label">CAGR 3 Y</span><span class="val" id="epsC3">-</span></div>
+        <div class="row"><span class="label">CAGR 5 Y</span><span class="val" id="epsC5">-</span></div>
+      </div>
+
+      <!-- FCF -->
+      <div class="metric-card"><h3>💵 Free Cash Flow</h3>
+        <div class="row"><span class="label">Current</span><span class="val" id="fcfNow">-</span></div>
+        <div class="row"><span class="label">Growth 1 Y</span><span class="val" id="fcfG1">-</span></div>
+        <div class="row"><span class="label">CAGR 3 Y</span><span class="val" id="fcfC3">-</span></div>
+        <div class="row"><span class="label">CAGR 5 Y</span><span class="val" id="fcfC5">-</span></div>
+        <div class="row"><span class="label">CAGR 10 Y</span><span class="val" id="fcfC10">-</span></div>
+      </div>
+
+      <!-- Revenue -->
+      <div class="metric-card"><h3>📊 Revenue Growth</h3>
+        <div class="row"><span class="label">Current</span><span class="val" id="revNow">-</span></div>
+        <div class="row"><span class="label">Growth 1 Y</span><span class="val" id="revG1">-</span></div>
+        <div class="row"><span class="label">CAGR 3 Y</span><span class="val" id="revC3">-</span></div>
+        <div class="row"><span class="label">CAGR 5 Y</span><span class="val" id="revC5">-</span></div>
+        <div class="row"><span class="label">CAGR 10 Y</span><span class="val" id="revC10">-</span></div>
+        <div class="row"><span class="label">CAGR 15 Y</span><span class="val" id="revC15">-</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* constants */
+const RAW='https://raw.githubusercontent.com/SundarAiReports/stock-analysis-India/main/data';
+const CACHE={};
+/* helpers */
+const cagr=(s,e,y)=>(!s||!e||y<=0)?null:Math.pow(e/s,1/y)-1;
+function cur(v,c='$'){if(!v||isNaN(v))return'-';const a=Math.abs(v);let n=v,s='';if(a>=1e12){n=v/1e12;s='T'}
+else if(a>=1e9){n=v/1e9;s='B'}else if(a>=1e6){n=v/1e6;s='M'}else if(a>=1e3){n=v/1e3;s='K'}return c+n.toFixed(2)+s;}
+const pct=v=>(!v||isNaN(v))?'-':(v>=0?'+':'')+(v*100).toFixed(2)+'%';
+function put(id,v,p=false,curr=false,curS='$'){const e=document.getElementById(id);if(!e)return;
+ if(curr)e.textContent=cur(v,curS);else if(p){e.textContent=pct(v);e.className=v>=0?'positive':'negative';}
+ else e.textContent=v??'-';}
+async function load(sym,ep){const k=`${sym}-${ep}`,c=CACHE[k];if(c&&Date.now()-c.t<3e5)return c.d;
+ const r=await fetch(`${RAW}/${sym.toLowerCase()}-${ep}.json`);if(!r.ok)throw Error(`${ep} missing`);const d=await r.json();CACHE[k]={d,t:Date.now()};return d;}
+/* main render */
+async function render(sym){
+ try{
+  document.getElementById('loading').textContent=`Loading ${sym}…`;
+  const curS=sym.includes('.NS')||sym.includes('.BO')?'₹':'$';
+  const q=await load(sym,'quote');
+  put('price',+q.close,false,true,curS);put('change',+q.change,false,true,curS);put('chgPct',+q.percent_change/100,true);
+  ['open','high','low'].forEach(f=>put(f,+q[f],false,true,curS));put('vol',(+q.volume).toLocaleString());
+
+  const t=await load(sym,'time_series');if(t.values){const p=t.values.reverse(),last=+p.at(-1).close;
+   [1,3,5,10,15].forEach(y=>{const idx=p.length-1-y*252;if(idx>=0)put(`p${y}y`,cagr(+p[idx].close,last,y),true);});}
+
+  try{const d=await load(sym,'dividends');if(d.length){
+   const latest=d[0],ann=d.slice(0,4).reduce((s,x)=>s+ +x.amount,0);
+   put('divAmt',ann,false,true,curS);put('divY',(ann/q.close)*100,true);put('exDiv',latest.ex_date);
+   if(d.length>=36)put('divC3',cagr(+d[35].amount,+latest.amount,3),true);
+   if(d.length>=60)put('divC5',cagr(+d[59].amount,+latest.amount,5),true);}}catch{}
+
+  try{const e=await load(sym,'earnings');if(e.length){
+   const cur=+e[0].eps_actual;put('epsNow',cur,false,true,curS);
+   if(e.length>=4)put('epsG1',cagr(+e[3].eps_actual,cur,1),true);
+   [3,5].forEach(y=>{const q=y*4;if(e.length>=q)put(`epsC${y}`,cagr(+e[q-1].eps_actual,cur,y),true);});}}catch{}
+
+  try{
+   const cf=await load(sym,'cash_flow');if(cf.length){
+    const fcf=+(cf[0].free_cash_flow||cf[0].operating_cash_flow||0);put('fcfNow',fcf,false,true,curS);
+    [1,3,5,10].forEach(y=>{if(cf.length>y)put(`fcf${y===1?'G1':`C${y}`}`,cagr(+(cf[y].free_cash_flow||cf[y].operating_cash_flow||0),fcf,y),true);});}
+   const inc=await load(sym,'income_statement');if(inc.length){
+    const rev=+inc[0].total_revenue;put('revNow',rev,false,true,curS);
+    [1,3,5,10,15].forEach(y=>{if(inc.length>y)put(`rev${y===1?'G1':`C${y}`}`,cagr(+inc[y].total_revenue,rev,y),true);});}}catch{}
+
+  document.getElementById('loading').style.display='none';
+  document.getElementById('content').style.display='block';
+ }catch(e){document.getElementById('loading').style.display='none';const er=document.getElementById('error');
+  er.style.display='block';er.textContent='Error: '+e.message;console.error(e);}
+}
+window.onload=()=>{
+ const p=new URLSearchParams(location.search),sym=p.get('symbol')||'AAPL';
+ document.getElementById('sym').textContent=sym;document.title=`${sym} – Dashboard`;render(sym);
+};
+</script>
+</body>
+</html>
