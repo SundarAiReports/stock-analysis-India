@@ -123,7 +123,7 @@ function put(id,v,isPct=false,isCur=false,curSym='$'){
 
 /* ───────── Netlify on-demand loader (30 min cache) ───────── */
 async function loadJSON(symbol, endpoint){
-  const url=`/.netlify/functions/stock?symbol=${symbol}&endpoint=${endpoint}`;
+  const url = `/api/stock?symbol=${encodeURIComponent(symbol)}&endpoint=${endpoint}`;
   const r=await fetch(url);
   if(!r.ok) throw new Error(`${endpoint} fetch failed`);
   return await r.json();
