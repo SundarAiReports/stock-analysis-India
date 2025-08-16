@@ -121,7 +121,7 @@ function put(id,v,isPct=false,isCur=false,curSym='$'){
   else            el.textContent=v??'-';
 }
 
-/* ───────── Netlify on-demand loader (30 min cache) ───────── */
+/* ───────── Vercel on-demand loader (30 min cache) ───────── */
 async function loadJSON(symbol, endpoint){
   const url = `/api/stock?symbol=${encodeURIComponent(symbol)}&endpoint=${endpoint}`;
   const r=await fetch(url);
